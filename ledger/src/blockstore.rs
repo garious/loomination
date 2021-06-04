@@ -16,12 +16,12 @@ use crate::{
 };
 pub use crate::{blockstore_db::BlockstoreError, blockstore_meta::SlotMeta};
 use bincode::deserialize;
+use dashmap::DashMap;
 use log::*;
 use rayon::{
     iter::{IntoParallelRefIterator, ParallelIterator},
     ThreadPool,
 };
-use rocksdb::DBRawIterator;
 use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_debug, datapoint_error};
 use solana_rayon_threadlimit::get_thread_count;
@@ -123,6 +123,8 @@ pub struct BlockstoreSignals {
     pub completed_slots_receiver: CompletedSlotsReceiver,
 }
 
+type ShredCache = BTreeMap<u64, Vec<u8>>;
+
 // ledger window
 pub struct Blockstore {
     ledger_path: PathBuf,
@@ -133,7 +135,6 @@ pub struct Blockstore {
     erasure_meta_cf: LedgerColumn<cf::ErasureMeta>,
     orphans_cf: LedgerColumn<cf::Orphans>,
     index_cf: LedgerColumn<cf::Index>,
-    data_shred_cf: LedgerColumn<cf::ShredData>,
     code_shred_cf: LedgerColumn<cf::ShredCode>,
     transaction_status_cf: LedgerColumn<cf::TransactionStatus>,
     address_signatures_cf: LedgerColumn<cf::AddressSignatures>,
@@ -151,6 +152,7 @@ pub struct Blockstore {
     pub lowest_cleanup_slot: Arc<RwLock<Slot>>,
     no_compaction: bool,
     slots_stats: Arc<Mutex<SlotsStats>>,
+    data_shred_cache: DashMap<Slot, Arc<RwLock<ShredCache>>>,
 }
 
 struct SlotsStats {
@@ -334,7 +336,6 @@ impl Blockstore {
         let orphans_cf = db.column();
         let index_cf = db.column();
 
-        let data_shred_cf = db.column();
         let code_shred_cf = db.column();
         let transaction_status_cf = db.column();
         let address_signatures_cf = db.column();
@@ -382,7 +383,6 @@ impl Blockstore {
             erasure_meta_cf,
             orphans_cf,
             index_cf,
-            data_shred_cf,
             code_shred_cf,
             transaction_status_cf,
             address_signatures_cf,
@@ -400,6 +400,7 @@ impl Blockstore {
             lowest_cleanup_slot: Arc::new(RwLock::new(0)),
             no_compaction: false,
             slots_stats: Arc::new(Mutex::new(SlotsStats::default())),
+            data_shred_cache: DashMap::new(),
         };
         if initialize_transaction_status_index {
             blockstore.initialize_transaction_status_index()?;
@@ -508,6 +509,12 @@ impl Blockstore {
         self.orphans_cf.get(slot)
     }
 
+    fn data_slot_cache(&self, slot: Slot) -> Option<Arc<RwLock<ShredCache>>> {
+        self.data_shred_cache
+            .get(&slot)
+            .map(|res| res.value().clone())
+    }
+
     // Get max root or 0 if it doesn't exist
     pub fn max_root(&self) -> Slot {
         self.db
@@ -586,7 +593,8 @@ impl Blockstore {
         (set_index..set_index + erasure_meta.config.num_data() as u64).for_each(|i| {
             if index.data().is_present(i) {
                 if let Some(shred) = prev_inserted_datas.remove(&(slot, i)).or_else(|| {
-                    let some_data = self.get_data_shred(slot, i)
+                    let some_data = self
+                        .get_data_shred(slot, i)
                         .expect("Database failure, could not fetch data shred");
                     if let Some(data) = some_data {
                         Shred::new_from_serialized_shred(data).ok()
@@ -623,7 +631,8 @@ impl Blockstore {
                     })
                     .or_else(|| {
                         if index.coding().is_present(i) {
-                            let some_code = self.get_coding_shred(slot, i)
+                            let some_code = self
+                                .get_coding_shred(slot, i)
                                 .expect("Database failure, could not fetch code shred");
                             if let Some(code) = some_code {
                                 Shred::new_from_serialized_shred(code).ok()
@@ -1263,7 +1272,6 @@ impl Blockstore {
             slot_meta,
             index_meta.data_mut(),
             &shred,
-            write_batch,
             shred_source,
         )?;
         just_inserted_data_shreds.insert((slot, shred_index), shred);
@@ -1474,7 +1482,6 @@ impl Blockstore {
         slot_meta: &mut SlotMeta,
         data_index: &mut ShredIndex,
         shred: &Shred,
-        write_batch: &mut WriteBatch,
         shred_source: ShredSource,
     ) -> Result<Vec<(u32, u32)>> {
         let slot = shred.slot();
@@ -1508,14 +1515,18 @@ impl Blockstore {
             slot_meta.consumed
         };
 
-        // Commit step: commit all changes to the mutable structures at once, or none at all.
-        // We don't want only a subset of these changes going through.
-        write_batch.put_bytes::<cf::ShredData>(
-            (slot, index),
-            // Payload will be padded out to SHRED_PAYLOAD_SIZE
-            // But only need to store the bytes within data_header.size
-            &shred.payload[..shred.data_header.size as usize],
-        )?;
+        let data_slot_cache = self.data_slot_cache(slot).unwrap_or_else(||
+            // Inner map for slot does not exist, let's create it
+            // DashMap .entry().or_insert() returns a RefMut, essentially a write lock,
+            // which is dropped after this block ends, minimizing time held by the lock.
+            // We still need a reference to the `ShredCache` behind the lock, hence, we
+            // clone it out (`ShredCache` is an Arc so it is cheap to clone).
+            self.data_shred_cache.entry(slot).or_insert(Arc::new(RwLock::new(BTreeMap::new()))).clone());
+        data_slot_cache
+            .write()
+            .unwrap()
+            .insert(index, shred.payload.clone());
+
         data_index.set_present(index, true);
         let newly_completed_data_sets = update_slot_meta(
             last_in_slot,
@@ -1567,17 +1578,49 @@ impl Blockstore {
         Ok(newly_completed_data_sets)
     }
 
+    fn get_data_shred_from_cache(&self, slot: Slot, index: u64) -> Result<Option<Vec<u8>>> {
+        let payload = self.data_slot_cache(slot).and_then(|slot_cache| {
+            slot_cache
+                .read()
+                .unwrap()
+                .get(&index)
+                // TODO: examine whether this clone() can be avoided
+                .map(|shred_ref| shred_ref.clone())
+        });
+        Ok(payload)
+    }
+
+
     pub fn get_data_shred(&self, slot: Slot, index: u64) -> Result<Option<Vec<u8>>> {
-        use crate::shred::SHRED_PAYLOAD_SIZE;
-        self.data_shred_cf.get_bytes((slot, index)).map(|data| {
-            data.map(|mut d| {
-                // Only data_header.size bytes stored in the blockstore so
-                // pad the payload out to SHRED_PAYLOAD_SIZE so that the
-                // erasure recovery works properly.
-                d.resize(cmp::max(d.len(), SHRED_PAYLOAD_SIZE), 0);
-                d
+        self.get_data_shred_from_cache(slot, index)
+    }
+
+    fn get_data_shreds_for_slot_from_cache(
+        &self,
+        slot: Slot,
+        index: u64,
+    ) -> ShredResult<Vec<Shred>> {
+        // First, get the cache for this slot which we'll need to reference later
+        let slot_cache = match self.data_slot_cache(slot) {
+            Some(slot_cache) => slot_cache,
+            None => return Ok(vec![]),
+        };
+        // Then, grab and hold read lock while we iterate through this slot's cache
+        let slot_cache = slot_cache.read().unwrap();
+
+        slot_cache
+            .iter()
+            .filter_map(|(shred_index, shred)| {
+                // TODO: a quick search showed we exclusively use get_data_shreds_for_slot() with index = 0
+                // As such, at the cost of flexibility to get partial slots (not sure of the use case for this),
+                // we could remove this index check
+                if shred_index >= &index {
+                    Some(Shred::new_from_serialized_shred(shred.to_vec()))
+                } else {
+                    None
+                }
             })
-        })
+            .collect()
     }
 
     pub fn get_data_shreds_for_slot(
@@ -1585,10 +1628,7 @@ impl Blockstore {
         slot: Slot,
         start_index: u64,
     ) -> ShredResult<Vec<Shred>> {
-        self.slot_data_iterator(slot, start_index)
-            .expect("blockstore couldn't fetch iterator")
-            .map(|data| Shred::new_from_serialized_shred(data.1.to_vec()))
-            .collect()
+        self.get_data_shreds_for_slot_from_cache(slot, start_index)
     }
 
     pub fn get_data_shreds(
@@ -1609,6 +1649,8 @@ impl Blockstore {
             }
             let to_index = cmp::min(to_index, meta.consumed);
             for index in from_index..to_index {
+                // TODO: this has two copies at the moment (copy out of cache and copy to existing buffer)
+                // However, maybe not a high priority given that this appears to be used only for tests
                 if let Some(shred_data) = self.get_data_shred(slot, index)? {
                     let shred_len = shred_data.len();
                     if buffer.len().saturating_sub(buffer_offset) >= shred_len {
@@ -1728,82 +1770,6 @@ impl Blockstore {
     // Given a start and end entry index, find all the missing
     // indexes in the ledger in the range [start_index, end_index)
     // for the slot with the specified slot
-    fn find_missing_indexes<C>(
-        db_iterator: &mut DBRawIterator,
-        slot: Slot,
-        first_timestamp: u64,
-        start_index: u64,
-        end_index: u64,
-        max_missing: usize,
-    ) -> Vec<u64>
-    where
-        C: Column<Index = (u64, u64)>,
-    {
-        if start_index >= end_index || max_missing == 0 {
-            return vec![];
-        }
-
-        let mut missing_indexes = vec![];
-        let ticks_since_first_insert =
-            DEFAULT_TICKS_PER_SECOND * (timestamp() - first_timestamp) / 1000;
-
-        // Seek to the first shred with index >= start_index
-        db_iterator.seek(&C::key((slot, start_index)));
-
-        // The index of the first missing shred in the slot
-        let mut prev_index = start_index;
-        'outer: loop {
-            if !db_iterator.valid() {
-                for i in prev_index..end_index {
-                    missing_indexes.push(i);
-                    if missing_indexes.len() == max_missing {
-                        break;
-                    }
-                }
-                break;
-            }
-            let (current_slot, index) = C::index(db_iterator.key().expect("Expect a valid key"));
-
-            let current_index = {
-                if current_slot > slot {
-                    end_index
-                } else {
-                    index
-                }
-            };
-
-            let upper_index = cmp::min(current_index, end_index);
-            // the tick that will be used to figure out the timeout for this hole
-            let reference_tick = u64::from(Shred::reference_tick_from_data(
-                db_iterator.value().expect("couldn't read value"),
-            ));
-
-            if ticks_since_first_insert < reference_tick + MAX_TURBINE_DELAY_IN_TICKS {
-                // The higher index holes have not timed out yet
-                break 'outer;
-            }
-            for i in prev_index..upper_index {
-                missing_indexes.push(i);
-                if missing_indexes.len() == max_missing {
-                    break 'outer;
-                }
-            }
-
-            if current_slot > slot {
-                break;
-            }
-
-            if current_index >= end_index {
-                break;
-            }
-
-            prev_index = current_index + 1;
-            db_iterator.next();
-        }
-
-        missing_indexes
-    }
-
     pub fn find_missing_data_indexes(
         &self,
         slot: Slot,
@@ -1812,21 +1778,58 @@ impl Blockstore {
         end_index: u64,
         max_missing: usize,
     ) -> Vec<u64> {
-        if let Ok(mut db_iterator) = self
-            .db
-            .raw_iterator_cf(self.db.cf_handle::<cf::ShredData>())
-        {
-            Self::find_missing_indexes::<cf::ShredData>(
-                &mut db_iterator,
-                slot,
-                first_timestamp,
-                start_index,
-                end_index,
-                max_missing,
-            )
-        } else {
-            vec![]
+        if start_index >= end_index || max_missing == 0 {
+            return vec![];
         }
+        let slot_cache = match self.data_slot_cache(slot) {
+            Some(slot_cache) => slot_cache,
+            None => {
+                return (start_index..cmp::min(end_index, start_index + max_missing as u64))
+                    .collect::<Vec<_>>()
+            }
+        };
+        let slot_cache = slot_cache.read().unwrap();
+
+        let mut missing_indexes = vec![];
+        let ticks_since_first_insert =
+            DEFAULT_TICKS_PER_SECOND * (timestamp() - first_timestamp) / 1000;
+
+        let mut prev_index = start_index;
+        'outer: for (index, shred) in slot_cache.iter() {
+            if *index < start_index {
+                continue;
+            }
+            // Get the tick that will be used to figure out the timeout for this hole
+            let reference_tick = u64::from(Shred::reference_tick_from_data(&shred));
+            // Break out early if the higher index holes have not timed out yet
+            if ticks_since_first_insert < reference_tick + MAX_TURBINE_DELAY_IN_TICKS {
+                return missing_indexes;
+            }
+            // Insert any newly discovered holes
+            for i in prev_index..cmp::min(*index, end_index) {
+                missing_indexes.push(i);
+                if missing_indexes.len() == max_missing {
+                    break 'outer;
+                }
+            }
+            // Update prev_index before the end-early check as we may use prev_index after
+            prev_index = *index + 1;
+            if *index >= end_index {
+                break;
+            }
+        }
+        // If prev_index < end_index, there could be holes within [start_index, end_index)
+        // but that are greater than any shreds we have in the blockstore
+        if missing_indexes.len() < max_missing && prev_index < end_index {
+            for i in prev_index..end_index {
+                missing_indexes.push(i);
+                if missing_indexes.len() == max_missing {
+                    break;
+                }
+            }
+        }
+
+        missing_indexes
     }
 
     pub fn get_block_time(&self, slot: Slot) -> Result<Option<UnixTimestamp>> {
@@ -2808,13 +2811,10 @@ impl Blockstore {
         end_index: u32,
         slot_meta: Option<&SlotMeta>,
     ) -> Result<Vec<Entry>> {
-        let data_shred_cf = self.db.column::<cf::ShredData>();
-
         // Short circuit on first error
         let data_shreds: Result<Vec<Shred>> = (start_index..=end_index)
             .map(|i| {
-                data_shred_cf
-                    .get_bytes((slot, u64::from(i)))
+                self.get_data_shred(slot, u64::from(i))
                     .and_then(|serialized_shred| {
                         if serialized_shred.is_none() {
                             if let Some(slot_meta) = slot_meta {
@@ -5248,6 +5248,7 @@ pub mod tests {
     #[test]
     fn test_find_missing_data_indexes() {
         let slot = 0;
+        let timestamp = 0;
         let blockstore_path = get_tmp_ledger_path!();
         let blockstore = Blockstore::open(&blockstore_path).unwrap();
 
@@ -5272,27 +5273,27 @@ pub mod tests {
         // range of [0, gap)
         let expected: Vec<u64> = (1..gap).collect();
         assert_eq!(
-            blockstore.find_missing_data_indexes(slot, 0, 0, gap, gap as usize),
+            blockstore.find_missing_data_indexes(slot, timestamp, 0, gap, gap as usize),
             expected
         );
         assert_eq!(
-            blockstore.find_missing_data_indexes(slot, 0, 1, gap, (gap - 1) as usize),
+            blockstore.find_missing_data_indexes(slot, timestamp, 1, gap, (gap - 1) as usize),
             expected,
         );
         assert_eq!(
-            blockstore.find_missing_data_indexes(slot, 0, 0, gap - 1, (gap - 1) as usize),
+            blockstore.find_missing_data_indexes(slot, timestamp, 0, gap - 1, (gap - 1) as usize),
             &expected[..expected.len() - 1],
         );
         assert_eq!(
-            blockstore.find_missing_data_indexes(slot, 0, gap - 2, gap, gap as usize),
+            blockstore.find_missing_data_indexes(slot, timestamp, gap - 2, gap, gap as usize),
             vec![gap - 2, gap - 1],
         );
         assert_eq!(
-            blockstore.find_missing_data_indexes(slot, 0, gap - 2, gap, 1),
+            blockstore.find_missing_data_indexes(slot, timestamp, gap - 2, gap, 1),
             vec![gap - 2],
         );
         assert_eq!(
-            blockstore.find_missing_data_indexes(slot, 0, 0, gap, 1),
+            blockstore.find_missing_data_indexes(slot, timestamp, 0, gap, 1),
             vec![1],
         );
 
@@ -5301,11 +5302,11 @@ pub mod tests {
         let mut expected: Vec<u64> = (1..gap).collect();
         expected.push(gap + 1);
         assert_eq!(
-            blockstore.find_missing_data_indexes(slot, 0, 0, gap + 2, (gap + 2) as usize),
+            blockstore.find_missing_data_indexes(slot, timestamp, 0, gap + 2, (gap + 2) as usize),
             expected,
         );
         assert_eq!(
-            blockstore.find_missing_data_indexes(slot, 0, 0, gap + 2, (gap - 1) as usize),
+            blockstore.find_missing_data_indexes(slot, timestamp, 0, gap + 2, (gap - 1) as usize),
             &expected[..expected.len() - 1],
         );
 
@@ -5321,7 +5322,7 @@ pub mod tests {
                 assert_eq!(
                     blockstore.find_missing_data_indexes(
                         slot,
-                        0,
+                        timestamp,
                         j * gap,
                         i * gap,
                         ((i - j) * gap) as usize

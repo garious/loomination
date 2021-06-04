@@ -4924,6 +4924,7 @@ dependencies = [
  "chrono",
  "chrono-humanize",
  "crossbeam-channel",
+ "dashmap",
  "dlopen",
  "dlopen_derive",
  "ed25519-dalek",
