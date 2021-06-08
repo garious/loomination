@@ -575,19 +575,18 @@ impl Blockstore {
     }
 
     fn get_recovery_data_shreds(
+        &self,
         index: &mut Index,
         set_index: u64,
         slot: Slot,
         erasure_meta: &ErasureMeta,
         available_shreds: &mut Vec<Shred>,
         prev_inserted_datas: &mut HashMap<(u64, u64), Shred>,
-        data_cf: &LedgerColumn<cf::ShredData>,
     ) {
         (set_index..set_index + erasure_meta.config.num_data() as u64).for_each(|i| {
             if index.data().is_present(i) {
                 if let Some(shred) = prev_inserted_datas.remove(&(slot, i)).or_else(|| {
-                    let some_data = data_cf
-                        .get_bytes((slot, i))
+                    let some_data = self.get_data_shred(slot, i)
                         .expect("Database failure, could not fetch data shred");
                     if let Some(data) = some_data {
                         Shred::new_from_serialized_shred(data).ok()
@@ -603,12 +602,12 @@ impl Blockstore {
     }
 
     fn get_recovery_coding_shreds(
+        &self,
         index: &mut Index,
         slot: Slot,
         erasure_meta: &ErasureMeta,
         available_shreds: &mut Vec<Shred>,
         prev_inserted_codes: &mut HashMap<(u64, u64), Shred>,
-        code_cf: &LedgerColumn<cf::ShredCode>,
     ) {
         (erasure_meta.set_index..erasure_meta.set_index + erasure_meta.config.num_coding() as u64)
             .for_each(|i| {
@@ -624,8 +623,7 @@ impl Blockstore {
                     })
                     .or_else(|| {
                         if index.coding().is_present(i) {
-                            let some_code = code_cf
-                                .get_bytes((slot, i))
+                            let some_code = self.get_coding_shred(slot, i)
                                 .expect("Database failure, could not fetch code shred");
                             if let Some(code) = some_code {
                                 Shred::new_from_serialized_shred(code).ok()
@@ -644,36 +642,33 @@ impl Blockstore {
     }
 
     fn recover_shreds(
+        &self,
         index: &mut Index,
         set_index: u64,
         erasure_meta: &ErasureMeta,
         prev_inserted_datas: &mut HashMap<(u64, u64), Shred>,
         prev_inserted_codes: &mut HashMap<(u64, u64), Shred>,
         recovered_data_shreds: &mut Vec<Shred>,
-        data_cf: &LedgerColumn<cf::ShredData>,
-        code_cf: &LedgerColumn<cf::ShredCode>,
     ) {
         // Find shreds for this erasure set and try recovery
         let slot = index.slot;
         let mut available_shreds = vec![];
 
-        Self::get_recovery_data_shreds(
+        self.get_recovery_data_shreds(
             index,
             set_index,
             slot,
             erasure_meta,
             &mut available_shreds,
             prev_inserted_datas,
-            data_cf,
         );
 
-        Self::get_recovery_coding_shreds(
+        self.get_recovery_coding_shreds(
             index,
             slot,
             erasure_meta,
             &mut available_shreds,
             prev_inserted_codes,
-            code_cf,
         );
 
         if let Ok(mut result) = Shredder::try_recovery(
@@ -721,14 +716,12 @@ impl Blockstore {
     }
 
     fn try_shred_recovery(
-        db: &Database,
+        &self,
         erasure_metas: &HashMap<(u64, u64), ErasureMeta>,
         index_working_set: &mut HashMap<u64, IndexMetaWorkingSetEntry>,
         prev_inserted_datas: &mut HashMap<(u64, u64), Shred>,
         prev_inserted_codes: &mut HashMap<(u64, u64), Shred>,
     ) -> Vec<Shred> {
-        let data_cf = db.column::<cf::ShredData>();
-        let code_cf = db.column::<cf::ShredCode>();
         let mut recovered_data_shreds = vec![];
         // Recovery rules:
         // 1. Only try recovery around indexes for which new data or coding shreds are received
@@ -740,15 +733,13 @@ impl Blockstore {
             let index = &mut index_meta_entry.index;
             match erasure_meta.status(index) {
                 ErasureMetaStatus::CanRecover => {
-                    Self::recover_shreds(
+                    self.recover_shreds(
                         index,
                         set_index,
                         erasure_meta,
                         prev_inserted_datas,
                         prev_inserted_codes,
                         &mut recovered_data_shreds,
-                        &data_cf,
-                        &code_cf,
                     );
                 }
                 ErasureMetaStatus::DataFull => {
@@ -882,8 +873,7 @@ impl Blockstore {
         let mut num_recovered_failed_invalid = 0;
         let mut num_recovered_exists = 0;
         if let Some(leader_schedule_cache) = leader_schedule {
-            let recovered_data = Self::try_shred_recovery(
-                db,
+            let recovered_data = self.try_shred_recovery(
                 &erasure_metas,
                 &mut index_working_set,
                 &mut just_inserted_data_shreds,
@@ -3989,7 +3979,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_insert_get_bytes() {
+    fn test_insert_get_shred() {
         // Create enough entries to ensure there are at least two shreds created
         let num_entries = max_ticks_per_n_shreds(1, None) + 1;
         assert!(num_entries > 1);
@@ -4007,8 +3997,7 @@ pub mod tests {
             .unwrap();
 
         let serialized_shred = ledger
-            .data_shred_cf
-            .get_bytes((0, last_shred.index() as u64))
+            .get_data_shred(0, last_shred.index() as u64)
             .unwrap()
             .unwrap();
         let deserialized_shred = Shred::new_from_serialized_shred(serialized_shred).unwrap();
@@ -4149,19 +4138,6 @@ pub mod tests {
             .expect("Expected erasure object to exist");
 
         assert_eq!(result, erasure);
-
-        // Test data column family
-        let data = vec![2u8; 16];
-        let data_key = (0, 0);
-        ledger.data_shred_cf.put_bytes(data_key, &data).unwrap();
-
-        let result = ledger
-            .data_shred_cf
-            .get_bytes(data_key)
-            .unwrap()
-            .expect("Expected data object to exist");
-
-        assert_eq!(result, data);
 
         // Destroying database without closing it first is undefined behavior
         drop(ledger);
