@@ -550,18 +550,6 @@ impl Blockstore {
         root_forks.chain(orphans_iter.flat_map(move |orphan| NextSlotsIterator::new(orphan, self)))
     }
 
-    pub fn slot_data_iterator(
-        &self,
-        slot: Slot,
-        index: u64,
-    ) -> Result<impl Iterator<Item = ((u64, u64), Box<[u8]>)> + '_> {
-        let slot_iterator = self.db.iter::<cf::ShredData>(IteratorMode::From(
-            (slot, index),
-            IteratorDirection::Forward,
-        ))?;
-        Ok(slot_iterator.take_while(move |((shred_slot, _), _)| *shred_slot == slot))
-    }
-
     pub fn slot_coding_iterator(
         &self,
         slot: Slot,
@@ -1589,7 +1577,6 @@ impl Blockstore {
         });
         Ok(payload)
     }
-
 
     pub fn get_data_shred(&self, slot: Slot, index: u64) -> Result<Option<Vec<u8>>> {
         self.get_data_shred_from_cache(slot, index)
@@ -5834,7 +5821,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_slot_data_iterator() {
+    fn test_get_data_shreds_for_slot() {
         // Construct the shreds
         let blockstore_path = get_tmp_ledger_path!();
         let blockstore = Blockstore::open(&blockstore_path).unwrap();
@@ -5846,16 +5833,12 @@ pub mod tests {
             blockstore.insert_shreds(slot_shreds, None, false).unwrap();
         }
 
-        // Slot doesnt exist, iterator should be empty
-        let shred_iter = blockstore.slot_data_iterator(5, 0).unwrap();
-        let result: Vec<_> = shred_iter.collect();
+        // Slot doesnt exist, shouldn't get any shreds back
+        let result = blockstore.get_data_shreds_for_slot(5, 0).unwrap();
         assert_eq!(result, vec![]);
 
-        // Test that the iterator for slot 8 contains what was inserted earlier
-        let shred_iter = blockstore.slot_data_iterator(8, 0).unwrap();
-        let result: Vec<Shred> = shred_iter
-            .filter_map(|(_, bytes)| Shred::new_from_serialized_shred(bytes.to_vec()).ok())
-            .collect();
+        // Slot does exist, test that we get back what was inserted earlier
+        let result = blockstore.get_data_shreds_for_slot(8, 0).unwrap();
         assert_eq!(result.len(), slot_8_shreds.len());
         assert_eq!(result, slot_8_shreds);
 
@@ -8117,15 +8100,19 @@ pub mod tests {
 
     fn verify_index_integrity(blockstore: &Blockstore, slot: u64) {
         let shred_index = blockstore.get_index(slot).unwrap().unwrap();
-
-        let data_iter = blockstore.slot_data_iterator(slot, 0).unwrap();
+        let data = blockstore.get_data_shreds_for_slot(slot, 0).unwrap();
         let mut num_data = 0;
-        for ((slot, index), _) in data_iter {
+        for shred in data.iter() {
             num_data += 1;
-            // Test that iterator and individual shred lookup yield same set
-            assert!(blockstore.get_data_shred(slot, index).unwrap().is_some());
+            // Test that by-slot and individual shred lookup yield same set
+            assert!(blockstore
+                .get_data_shred(shred.common_header.slot, shred.common_header.index.into())
+                .unwrap()
+                .is_some());
             // Test that the data index has current shred accounted for
-            assert!(shred_index.data().is_present(index));
+            assert!(shred_index
+                .data()
+                .is_present(shred.common_header.index.into()));
         }
 
         // Test the data index doesn't have anything extra
