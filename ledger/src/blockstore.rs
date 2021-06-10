@@ -62,8 +62,11 @@ use thiserror::Error;
 use trees::{Tree, TreeWalk};
 
 pub mod blockstore_purge;
+pub mod blockstore_shreds;
 
 pub const BLOCKSTORE_DIRECTORY: &str = "rocksdb";
+pub const SHRED_DIRECTORY: &str = "shreds";
+pub const DATA_SHRED_DIRECTORY: &str = "data";
 
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
                     .num_threads(get_thread_count())
@@ -152,6 +155,7 @@ pub struct Blockstore {
     pub lowest_cleanup_slot: Arc<RwLock<Slot>>,
     no_compaction: bool,
     slots_stats: Arc<Mutex<SlotsStats>>,
+    data_shred_path: PathBuf,
     data_shred_cache: DashMap<Slot, Arc<RwLock<ShredCache>>>,
 }
 
@@ -314,6 +318,8 @@ impl Blockstore {
     ) -> Result<Blockstore> {
         fs::create_dir_all(&ledger_path)?;
         let blockstore_path = ledger_path.join(BLOCKSTORE_DIRECTORY);
+        let data_shred_path = ledger_path.join(SHRED_DIRECTORY).join(DATA_SHRED_DIRECTORY);
+        fs::create_dir_all(&data_shred_path)?;
 
         adjust_ulimit_nofile(enforce_ulimit_nofile)?;
 
@@ -400,6 +406,7 @@ impl Blockstore {
             lowest_cleanup_slot: Arc::new(RwLock::new(0)),
             no_compaction: false,
             slots_stats: Arc::new(Mutex::new(SlotsStats::default())),
+            data_shred_path,
             data_shred_cache: DashMap::new(),
         };
         if initialize_transaction_status_index {
@@ -507,12 +514,6 @@ impl Blockstore {
 
     pub fn orphan(&self, slot: Slot) -> Result<Option<bool>> {
         self.orphans_cf.get(slot)
-    }
-
-    fn data_slot_cache(&self, slot: Slot) -> Option<Arc<RwLock<ShredCache>>> {
-        self.data_shred_cache
-            .get(&slot)
-            .map(|res| res.value().clone())
     }
 
     // Get max root or 0 if it doesn't exist
@@ -1503,17 +1504,7 @@ impl Blockstore {
             slot_meta.consumed
         };
 
-        let data_slot_cache = self.data_slot_cache(slot).unwrap_or_else(||
-            // Inner map for slot does not exist, let's create it
-            // DashMap .entry().or_insert() returns a RefMut, essentially a write lock,
-            // which is dropped after this block ends, minimizing time held by the lock.
-            // We still need a reference to the `ShredCache` behind the lock, hence, we
-            // clone it out (`ShredCache` is an Arc so it is cheap to clone).
-            self.data_shred_cache.entry(slot).or_insert(Arc::new(RwLock::new(BTreeMap::new()))).clone());
-        data_slot_cache
-            .write()
-            .unwrap()
-            .insert(index, shred.payload.clone());
+        self.insert_data_shred_into_cache(slot, index, shred);
 
         data_index.set_present(index, true);
         let newly_completed_data_sets = update_slot_meta(
@@ -1561,53 +1552,20 @@ impl Blockstore {
                 ("num_repaired", num_repaired, i64),
                 ("num_recovered", num_recovered, i64),
             );
+            // TODO: ONLY FOR TESTING, REMOVE THIS LATER
+            self.flush_data_shreds_for_slot_to_fs(slot)?;
         }
         trace!("inserted shred into slot {:?} and index {:?}", slot, index);
         Ok(newly_completed_data_sets)
     }
 
-    fn get_data_shred_from_cache(&self, slot: Slot, index: u64) -> Result<Option<Vec<u8>>> {
-        let payload = self.data_slot_cache(slot).and_then(|slot_cache| {
-            slot_cache
-                .read()
-                .unwrap()
-                .get(&index)
-                // TODO: examine whether this clone() can be avoided
-                .map(|shred_ref| shred_ref.clone())
-        });
-        Ok(payload)
-    }
-
     pub fn get_data_shred(&self, slot: Slot, index: u64) -> Result<Option<Vec<u8>>> {
-        self.get_data_shred_from_cache(slot, index)
-    }
-
-    fn get_data_shreds_for_slot_from_cache(
-        &self,
-        slot: Slot,
-        index: u64,
-    ) -> ShredResult<Vec<Shred>> {
-        // First, get the cache for this slot which we'll need to reference later
-        let slot_cache = match self.data_slot_cache(slot) {
-            Some(slot_cache) => slot_cache,
-            None => return Ok(vec![]),
-        };
-        // Then, grab and hold read lock while we iterate through this slot's cache
-        let slot_cache = slot_cache.read().unwrap();
-
-        slot_cache
-            .iter()
-            .filter_map(|(shred_index, shred)| {
-                // TODO: a quick search showed we exclusively use get_data_shreds_for_slot() with index = 0
-                // As such, at the cost of flexibility to get partial slots (not sure of the use case for this),
-                // we could remove this index check
-                if shred_index >= &index {
-                    Some(Shred::new_from_serialized_shred(shred.to_vec()))
-                } else {
-                    None
-                }
-            })
-            .collect()
+        if let Ok(Some(shred)) = self.get_data_shred_from_cache(slot, index) {
+            Ok(Some(shred))
+        } else {
+            // No luck in the cache, let's try the filesystem
+            self.get_data_shred_from_fs(slot, index)
+        }
     }
 
     pub fn get_data_shreds_for_slot(
@@ -1615,7 +1573,12 @@ impl Blockstore {
         slot: Slot,
         start_index: u64,
     ) -> ShredResult<Vec<Shred>> {
-        self.get_data_shreds_for_slot_from_cache(slot, start_index)
+        if let Some(shreds) = self.get_data_shreds_for_slot_from_cache(slot, start_index) {
+            shreds
+        } else {
+            self.get_data_shreds_for_slot_from_fs(slot, start_index)
+                .unwrap_or(Ok(vec![]))
+        }
     }
 
     pub fn get_data_shreds(
@@ -1768,6 +1731,7 @@ impl Blockstore {
         if start_index >= end_index || max_missing == 0 {
             return vec![];
         }
+        // TODO: need to adapt this to work with disk too
         let slot_cache = match self.data_slot_cache(slot) {
             Some(slot_cache) => slot_cache,
             None => {

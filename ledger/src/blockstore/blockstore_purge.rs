@@ -215,7 +215,7 @@ impl Blockstore {
         purge_stats.write_batch += write_timer.as_us();
 
         for slot in from_slot..to_slot {
-            self.data_shred_cache.remove(&slot);
+            self.purge_data_shreds(slot);
         }
 
         // only drop w_active_transaction_status_index after we do db.write(write_batch);
