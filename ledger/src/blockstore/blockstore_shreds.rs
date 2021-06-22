@@ -8,6 +8,116 @@
 use super::*;
 use crate::shred::SHRED_PAYLOAD_SIZE;
 use std::{fs, io::Read, io::Seek, io::SeekFrom, io::Write};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+// TODO: revisit this value / correlate it to the cache size and/or flush interval
+// Shreds are 1228 bytes, so WAL filesize will be at most 1024 * 512 * 1228 = 614 MB
+pub const DEFAULT_MAX_WAL_SHREDS: usize = 1024 * 512;
+
+// The WAL (Write Ahead Log) provides persistent backing for data that is written into
+// cache. The WAL is used to recover data held in memory in (that hasn't been pushed)
+// to disk in the event of process termination.
+//
+// The WAL will only be used to recover state at startup, or to record shred insertion
+// in Blockstore::insert_shreds(). The former is a single threaded scenario; the
+// latter is protected by write-lock, so we don't need to worry about any sync in here
+pub struct WAL {
+    // Directory where WAL file(s) will be stored
+    wal_path: PathBuf,
+    // The maximum number of shreds allowed in a single WAL file
+    max_shreds: usize,
+    // The number of shreds written to current WAL file
+    cur_shreds: usize,
+    // ID to current WAL file
+    id: Option<u64>,
+}
+
+impl WAL {
+    pub fn new(shred_db_path: &Path, max_shreds: usize) -> Result<WAL> {
+        let wal_path = shred_db_path.join("wal");
+        fs::create_dir_all(&wal_path)?;
+        let wal = Self {
+            wal_path,
+            max_shreds,
+            cur_shreds: 0,
+            id: None,
+        };
+        Ok(wal)
+    }
+
+    // Recover shreds from log files at specified path
+    fn recover(wal_path: &Path) -> Result<Vec<Shred>> {
+        assert!(wal_path.is_dir());
+        let mut buffers = vec![];
+        let dir = fs::read_dir(wal_path)?;
+        for log in dir {
+            // Log filenames are the timestamp at which they're created
+            let log = log?;
+            // TODO: better error handling below line? We can probably fail
+            // if there is some unknown file in this directory
+            let id: u64 = log.file_name().to_str().unwrap().parse().unwrap();
+
+            let path = Path::new(wal_path).join(id.to_string());
+            let mut file = fs::File::open(path)?;
+            loop {
+                let mut buffer = vec![0; SHRED_PAYLOAD_SIZE];
+                match file.read_exact(&mut buffer).ok() {
+                    Some(_) => buffers.push(buffer),
+                    None => break,
+                };
+            }
+        }
+
+        let shreds: ShredResult<Vec<_>> = buffers
+            .into_iter()
+            .map(move |shred| Shred::new_from_serialized_shred(shred))
+            .collect();
+        let shreds = shreds.map_err(|err| {
+            BlockstoreError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(format!(
+                "Could not reconstruct shred from shred payload: {:?}",
+                err
+            ))))
+        })?;
+        Ok(shreds)
+    }
+
+    // Write the supplied shred payloads into the log
+    pub fn write(&mut self, shreds: &HashMap<(u64, u64), Shred>) -> Result<()> {
+        // Check if write would push WAL size over limit
+        let mut file = if self.id.is_none() || self.cur_shreds + shreds.len() > self.max_shreds {
+            self.id = Some(SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs());
+            self.cur_shreds = 0;
+            let path = Path::new(&self.wal_path).join(self.id.unwrap().to_string());
+            fs::File::create(path)
+        } else {
+            let path = Path::new(&self.wal_path).join(self.id.unwrap().to_string());
+            fs::OpenOptions::new().append(true).open(path)
+        }?;
+
+        let result: Result<Vec<_>> = shreds
+            .iter()
+            .map(|((slot, index), shred)| {
+                file.write_all(&shred.payload).map_err(|err| {
+                    // TODO: slot / index possibly not relevant, also should we panic?
+                    BlockstoreError::Io(IoError::new(
+                        ErrorKind::Other,
+                        format!(
+                            "Unable to write shred (slot {}, index {}) to wal: {}",
+                            slot, index, err
+                        ),
+                    ))
+                })
+            })
+            .collect();
+        // Check that all of the individual writes succeeded
+        let _result = result?;
+        self.cur_shreds += shreds.len();
+        Ok(())
+    }
+}
 
 impl Blockstore {
     pub(crate) fn get_data_shred_from_cache(
