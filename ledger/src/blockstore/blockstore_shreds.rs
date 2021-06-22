@@ -7,21 +7,24 @@
 
 use super::*;
 use crate::shred::SHRED_PAYLOAD_SIZE;
-use std::{fs, io::Read, io::Seek, io::SeekFrom, io::Write};
 use std::time::{SystemTime, UNIX_EPOCH};
+use std::{fs, io::Read, io::Seek, io::SeekFrom, io::Write};
+
+pub const SHRED_DIRECTORY: &str = "shreds";
+pub const DATA_SHRED_DIRECTORY: &str = "data";
 
 // TODO: revisit this value / correlate it to the cache size and/or flush interval
 // Shreds are 1228 bytes, so WAL filesize will be at most 1024 * 512 * 1228 = 614 MB
 pub const DEFAULT_MAX_WAL_SHREDS: usize = 1024 * 512;
 
-// The WAL (Write Ahead Log) provides persistent backing for data that is written into
+// A WAL (Write Ahead Log) provides persistent backing for data that is written into
 // cache. The WAL is used to recover data held in memory in (that hasn't been pushed)
 // to disk in the event of process termination.
 //
 // The WAL will only be used to recover state at startup, or to record shred insertion
 // in Blockstore::insert_shreds(). The former is a single threaded scenario; the
 // latter is protected by write-lock, so we don't need to worry about any sync in here
-pub struct WAL {
+pub struct ShredWAL {
     // Directory where WAL file(s) will be stored
     wal_path: PathBuf,
     // The maximum number of shreds allowed in a single WAL file
@@ -32,8 +35,8 @@ pub struct WAL {
     id: Option<u64>,
 }
 
-impl WAL {
-    pub fn new(shred_db_path: &Path, max_shreds: usize) -> Result<WAL> {
+impl ShredWAL {
+    pub fn new(shred_db_path: &Path, max_shreds: usize) -> Result<ShredWAL> {
         let wal_path = shred_db_path.join("wal");
         fs::create_dir_all(&wal_path)?;
         let wal = Self {
@@ -85,10 +88,12 @@ impl WAL {
     pub fn write(&mut self, shreds: &HashMap<(u64, u64), Shred>) -> Result<()> {
         // Check if write would push WAL size over limit
         let mut file = if self.id.is_none() || self.cur_shreds + shreds.len() > self.max_shreds {
-            self.id = Some(SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_secs());
+            self.id = Some(
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs(),
+            );
             self.cur_shreds = 0;
             let path = Path::new(&self.wal_path).join(self.id.unwrap().to_string());
             fs::File::create(path)

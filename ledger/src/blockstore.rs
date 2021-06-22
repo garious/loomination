@@ -62,11 +62,10 @@ use thiserror::Error;
 use trees::{Tree, TreeWalk};
 
 pub mod blockstore_purge;
-pub mod blockstore_shreds;
+mod blockstore_shreds;
+use blockstore_shreds::{DATA_SHRED_DIRECTORY, SHRED_DIRECTORY};
 
 pub const BLOCKSTORE_DIRECTORY: &str = "rocksdb";
-pub const SHRED_DIRECTORY: &str = "shreds";
-pub const DATA_SHRED_DIRECTORY: &str = "data";
 
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
                     .num_threads(get_thread_count())
@@ -318,7 +317,8 @@ impl Blockstore {
     ) -> Result<Blockstore> {
         fs::create_dir_all(&ledger_path)?;
         let blockstore_path = ledger_path.join(BLOCKSTORE_DIRECTORY);
-        let data_shred_path = ledger_path.join(SHRED_DIRECTORY).join(DATA_SHRED_DIRECTORY);
+        let shred_db_path = ledger_path.join(SHRED_DIRECTORY);
+        let data_shred_path = shred_db_path.join(DATA_SHRED_DIRECTORY);
         fs::create_dir_all(&data_shred_path)?;
 
         adjust_ulimit_nofile(enforce_ulimit_nofile)?;
