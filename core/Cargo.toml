@@ -48,6 +48,7 @@ solana-banks-server = { path = "../banks-server", version = "=1.8.0" }
 solana-clap-utils = { path = "../clap-utils", version = "=1.8.0" }
 solana-client = { path = "../client", version = "=1.8.0" }
 solana-config-program = { path = "../programs/config", version = "=1.8.0" }
+solana-entry = { path = "../entry", version = "=1.8.0" }
 solana-gossip = { path = "../gossip", version = "=1.8.0" }
 solana-ledger = { path = "../ledger", version = "=1.8.0" }
 solana-logger = { path = "../logger", version = "=1.8.0" }

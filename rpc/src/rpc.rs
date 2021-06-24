@@ -3843,12 +3843,12 @@ pub fn create_test_transactions_and_populate_blockstore(
     let success_tx =
         solana_sdk::system_transaction::transfer(mint_keypair, &keypair1.pubkey(), 2, blockhash);
     let success_signature = success_tx.signatures[0];
-    let entry_1 = solana_ledger::entry::next_entry(&blockhash, 1, vec![success_tx]);
+    let entry_1 = solana_entry::entry::next_entry(&blockhash, 1, vec![success_tx]);
     // Failed transaction, InstructionError
     let ix_error_tx =
         solana_sdk::system_transaction::transfer(keypair2, &keypair3.pubkey(), 10, blockhash);
     let ix_error_signature = ix_error_tx.signatures[0];
-    let entry_2 = solana_ledger::entry::next_entry(&entry_1.hash, 1, vec![ix_error_tx]);
+    let entry_2 = solana_entry::entry::next_entry(&entry_1.hash, 1, vec![ix_error_tx]);
     // Failed transaction
     let fail_tx = solana_sdk::system_transaction::transfer(
         mint_keypair,
@@ -3856,7 +3856,7 @@ pub fn create_test_transactions_and_populate_blockstore(
         2,
         Hash::default(),
     );
-    let entry_3 = solana_ledger::entry::next_entry(&entry_2.hash, 1, vec![fail_tx]);
+    let entry_3 = solana_entry::entry::next_entry(&entry_2.hash, 1, vec![fail_tx]);
     let mut entries = vec![entry_1, entry_2, entry_3];
 
     let shreds = solana_ledger::blockstore::entries_to_test_shreds(

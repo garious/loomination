@@ -13,7 +13,6 @@ edition = "2018"
 [dependencies]
 log = "0.4.14"
 solana-sdk = { path = "../sdk", version = "=1.8.0" }
-solana-metrics = { path = "../metrics", version = "=1.8.0" }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

@@ -15,8 +15,6 @@ byteorder = "1.4.3"
 chrono = { version = "0.4.11", features = ["serde"] }
 chrono-humanize = "0.2.1"
 crossbeam-channel = "0.5"
-dlopen_derive = "0.1.4"
-dlopen = "0.1.8"
 ed25519-dalek = "1.0.1"
 fs_extra = "1.2.0"
 futures = "0.3.15"
@@ -34,6 +32,7 @@ serde = "1.0.126"
 serde_bytes = "0.11.5"
 sha2 = "0.9.5"
 solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "=1.8.0" }
+solana-entry = { path = "../entry", version = "=1.8.0" }
 solana-frozen-abi = { path = "../frozen-abi", version = "=1.8.0" }
 solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.8.0" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.8.0" }

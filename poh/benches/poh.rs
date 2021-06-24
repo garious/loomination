@@ -4,7 +4,7 @@
 extern crate test;
 
 use {
-    solana_ledger::poh::Poh,
+    solana_entry::poh::Poh,
     solana_poh::poh_service::DEFAULT_HASHES_PER_BATCH,
     solana_sdk::hash::Hash,
     std::sync::{

@@ -5,12 +5,9 @@ use super::{
     *,
 };
 use crate::{broadcast_stage::broadcast_utils::UnfinishedSlotInfo, cluster_nodes::ClusterNodes};
-use solana_ledger::{
-    entry::Entry,
-    shred::{
-        ProcessShredsStats, Shred, Shredder, MAX_DATA_SHREDS_PER_FEC_BLOCK,
-        SHRED_TICK_REFERENCE_MASK,
-    },
+use solana_entry::entry::Entry;
+use solana_ledger::shred::{
+    ProcessShredsStats, Shred, Shredder, MAX_DATA_SHREDS_PER_FEC_BLOCK, SHRED_TICK_REFERENCE_MASK,
 };
 use solana_sdk::{pubkey::Pubkey, signature::Keypair, timing::duration_as_us};
 use std::{collections::HashMap, sync::RwLock, time::Duration};
@@ -502,11 +499,11 @@ impl BroadcastRun for StandardBroadcastRun {
 #[cfg(test)]
 mod test {
     use super::*;
+    use solana_entry::entry::create_ticks;
     use solana_gossip::cluster_info::{ClusterInfo, Node};
     use solana_ledger::genesis_utils::create_genesis_config;
     use solana_ledger::{
-        blockstore::Blockstore, entry::create_ticks, get_tmp_ledger_path,
-        shred::max_ticks_per_n_shreds,
+        blockstore::Blockstore, get_tmp_ledger_path, shred::max_ticks_per_n_shreds,
     };
     use solana_runtime::bank::Bank;
     use solana_sdk::{

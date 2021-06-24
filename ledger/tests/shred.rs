@@ -1,5 +1,5 @@
 #![allow(clippy::integer_arithmetic)]
-use solana_ledger::entry::Entry;
+use solana_entry::entry::Entry;
 use solana_ledger::shred::{
     max_entries_per_n_shred, verify_test_data_shred, Shred, Shredder,
     MAX_DATA_SHREDS_PER_FEC_BLOCK, SIZE_OF_DATA_SHRED_PAYLOAD,

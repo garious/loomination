@@ -625,10 +625,10 @@ impl WindowService {
 #[cfg(test)]
 mod test {
     use super::*;
+    use solana_entry::entry::{create_ticks, Entry};
     use solana_gossip::contact_info::ContactInfo;
     use solana_ledger::{
         blockstore::{make_many_slot_entries, Blockstore},
-        entry::{create_ticks, Entry},
         genesis_utils::create_genesis_config_with_leader,
         get_tmp_ledger_path,
         shred::{DataShredHeader, Shredder},

@@ -1,7 +1,7 @@
 use super::broadcast_utils::ReceiveResults;
 use super::*;
 use log::*;
-use solana_ledger::entry::{create_ticks, Entry, EntrySlice};
+use solana_entry::entry::{create_ticks, Entry, EntrySlice};
 use solana_ledger::shred::Shredder;
 use solana_runtime::blockhash_queue::BlockhashQueue;
 use solana_sdk::clock::Slot;

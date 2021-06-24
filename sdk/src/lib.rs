@@ -26,6 +26,7 @@ pub mod feature_set;
 pub mod genesis_config;
 pub mod hard_forks;
 pub mod hash;
+pub mod hashed_transaction;
 pub mod inflation;
 pub mod keyed_account;
 pub mod log;

@@ -1,7 +1,7 @@
 [package]
-name = "solana-poh"
+name = "solana-entry"
 version = "1.8.0"
-description = "Solana PoH"
+description = "Solana Entry"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
@@ -10,31 +10,27 @@ documentation = "https://docs.rs/solana-poh"
 edition = "2018"
 
 [dependencies]
-core_affinity = "0.5.10"
-crossbeam-channel = "0.5"
-log = "0.4.14"
-solana-entry = { path = "../entry", version = "=1.8.0" }
-solana-ledger = { path = "../ledger", version = "=1.8.0" }
+bincode = "1.3.3"
+dlopen = "0.1.8"
+dlopen_derive = "0.1.4"
+log = "0.4.11"
+rand = "0.7.0"
+rayon = "1.5.1"
+serde = "1.0.126"
 solana-measure = { path = "../measure", version = "=1.8.0" }
+solana-merkle-tree = { path = "../merkle-tree", version = "=1.8.0" }
 solana-metrics = { path = "../metrics", version = "=1.8.0" }
-solana-runtime = { path = "../runtime", version = "=1.8.0" }
+solana-perf = { path = "../perf", version = "=1.8.0" }
+solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.8.0" }
 solana-sdk = { path = "../sdk", version = "=1.8.0" }
-solana-sys-tuner = { path = "../sys-tuner", version = "=1.8.0" }
-thiserror = "1.0"
 
 [dev-dependencies]
-bincode = "1.3.3"
 matches = "0.1.6"
-rand = "0.7.0"
 solana-logger = { path = "../logger", version = "=1.8.0" }
-solana-perf = { path = "../perf", version = "=1.8.0" }
 
 [lib]
 crate-type = ["lib"]
-name = "solana_poh"
-
-[[bench]]
-name = "poh"
+name = "solana_entry"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

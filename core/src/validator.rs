@@ -18,6 +18,7 @@ use crate::{
 };
 use crossbeam_channel::{bounded, unbounded};
 use rand::{thread_rng, Rng};
+use solana_entry::poh::compute_hash_time_ns;
 use solana_gossip::{
     cluster_info::{
         ClusterInfo, Node, DEFAULT_CONTACT_DEBUG_INTERVAL_MILLIS,
@@ -33,7 +34,6 @@ use solana_ledger::{
     blockstore_processor::{self, TransactionStatusSender},
     leader_schedule::FixedSchedule,
     leader_schedule_cache::LeaderScheduleCache,
-    poh::compute_hash_time_ns,
 };
 use solana_measure::measure::Measure;
 use solana_metrics::datapoint_info;
@@ -1626,8 +1626,8 @@ mod tests {
     fn test_backup_and_clear_blockstore() {
         use std::time::Instant;
         solana_logger::setup();
-        use solana_ledger::get_tmp_ledger_path;
-        use solana_ledger::{blockstore, entry};
+        use solana_entry::entry;
+        use solana_ledger::{blockstore, get_tmp_ledger_path};
         let blockstore_path = get_tmp_ledger_path!();
         {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();

@@ -7,13 +7,11 @@ use rand::{thread_rng, Rng};
 use rayon::prelude::*;
 use solana_client::thin_client::create_client;
 use solana_core::consensus::VOTE_THRESHOLD_DEPTH;
+use solana_entry::entry::{Entry, EntrySlice};
 use solana_gossip::{
     cluster_info::VALIDATOR_PORT_RANGE, contact_info::ContactInfo, gossip_service::discover_cluster,
 };
-use solana_ledger::{
-    blockstore::Blockstore,
-    entry::{Entry, EntrySlice},
-};
+use solana_ledger::blockstore::Blockstore;
 use solana_sdk::{
     client::SyncClient,
     clock::{self, Slot, NUM_CONSECUTIVE_LEADER_SLOTS},

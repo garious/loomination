@@ -287,7 +287,8 @@ impl Sanitize for DuplicateShred {
 pub(crate) mod tests {
     use super::*;
     use rand::Rng;
-    use solana_ledger::{entry::Entry, shred::Shredder};
+    use solana_entry::entry::Entry;
+    use solana_ledger::shred::Shredder;
     use solana_sdk::{hash, signature::Keypair, signature::Signer, system_transaction};
     use std::sync::Arc;
 
