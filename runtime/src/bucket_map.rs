@@ -6,10 +6,10 @@ use log::*;
 use rand::thread_rng;
 use rand::Rng;
 use solana_sdk::pubkey::Pubkey;
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
 use solana_sdk::slot_history::Slot;
+use std::collections::hash_map::DefaultHasher;
 use std::convert::TryInto;
+use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -141,7 +141,11 @@ impl Bucket {
         Self::bucket_find_entry(&self.index, key, self.random)
     }
 
-    fn bucket_find_entry<'a>(index: &'a DataBucket, key: &Pubkey, random: u64) -> Option<(&'a IndexEntry, u64)> {
+    fn bucket_find_entry<'a>(
+        index: &'a DataBucket,
+        key: &Pubkey,
+        random: u64,
+    ) -> Option<(&'a IndexEntry, u64)> {
         let ix = Self::bucket_index_ix(index, key, random);
         for i in ix..ix + MAX_SEARCH {
             let ii = i % index.capacity();
@@ -304,7 +308,10 @@ impl Bucket {
                             let new_elem: &mut IndexEntry = index.get_mut(new_ix);
                             *new_elem = *elem;
                             let dbg_elem: IndexEntry = *new_elem;
-                            assert_eq!(Self::bucket_find_entry(&index, &elem.key, random).unwrap(), (&dbg_elem, new_ix));
+                            assert_eq!(
+                                Self::bucket_find_entry(&index, &elem.key, random).unwrap(),
+                                (&dbg_elem, new_ix)
+                            );
                         }
                         true
                     })
@@ -381,7 +388,7 @@ mod tests {
         );
         std::fs::remove_dir_all(tmpdir).unwrap();
     }
-    
+
     #[test]
     fn bucket_map_test_update() {
         let key = Pubkey::new_unique();
@@ -401,7 +408,7 @@ mod tests {
         );
         std::fs::remove_dir_all(tmpdir).unwrap();
     }
-    
+
     #[test]
     fn bucket_map_test_delete() {
         let tmpdir = std::env::temp_dir().join("bucket_map_test_delete");
@@ -411,16 +418,16 @@ mod tests {
         for i in 0..10 {
             let key = Pubkey::new_unique();
             assert_eq!(index.read_value(&key), None);
-    
+
             index.update(&key, |_| Some(vec![(i, AccountInfo::default())]));
             assert_eq!(
                 index.read_value(&key),
                 Some(vec![(i, AccountInfo::default())])
             );
-    
+
             index.delete_key(&key);
             assert_eq!(index.read_value(&key), None);
-    
+
             index.update(&key, |_| Some(vec![(i, AccountInfo::default())]));
             assert_eq!(
                 index.read_value(&key),
@@ -430,7 +437,7 @@ mod tests {
         }
         std::fs::remove_dir_all(tmpdir).unwrap();
     }
-    
+
     #[test]
     fn bucket_map_test_delete_2() {
         let tmpdir = std::env::temp_dir().join("bucket_map_test_delete_2");
@@ -440,16 +447,16 @@ mod tests {
         for i in 0..100 {
             let key = Pubkey::new_unique();
             assert_eq!(index.read_value(&key), None);
-    
+
             index.update(&key, |_| Some(vec![(i, AccountInfo::default())]));
             assert_eq!(
                 index.read_value(&key),
                 Some(vec![(i, AccountInfo::default())])
             );
-    
+
             index.delete_key(&key);
             assert_eq!(index.read_value(&key), None);
-    
+
             index.update(&key, |_| Some(vec![(i, AccountInfo::default())]));
             assert_eq!(
                 index.read_value(&key),
@@ -459,8 +466,7 @@ mod tests {
         }
         std::fs::remove_dir_all(tmpdir).unwrap();
     }
-    
-    
+
     #[test]
     fn bucket_map_test_n_drives() {
         let tmpdir = std::env::temp_dir().join("bucket_map_test_n_drives");
