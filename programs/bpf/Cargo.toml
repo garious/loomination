@@ -36,9 +36,16 @@ solana-sdk = { path = "../../sdk", version = "=1.8.0" }
 solana-transaction-status = { path = "../../transaction-status", version = "=1.8.0" }
 solana-account-decoder = { path = "../../account-decoder", version = "=1.8.0" }
 
+[dev-dependencies]
+ed25519-dalek = "=1.0.1"
+rand = "0.7"
+
 
 [[bench]]
 name = "bpf_loader"
+
+[[bench]]
+name = "ed25519_sig_check"
 
 [workspace]
 members = [
@@ -51,6 +58,7 @@ members = [
     "rust/dep_crate",
     "rust/deprecated_loader",
     "rust/dup_accounts",
+    "rust/ed25519_sig_check",
     "rust/error_handling",
     "rust/external_spend",
     "rust/finalize",

@@ -135,6 +135,10 @@ pub mod memory_ops_syscalls {
     solana_sdk::declare_id!("ENQi37wsVhTvFz2gUiZAAbqFEWGN2jwFsqdEDTE8A4MU");
 }
 
+pub mod ed25519_sig_check_syscall_enabled {
+    solana_sdk::declare_id!("DTCJWa8EMAUB8iwcypVDanwuWFTPTbYrrijtnkec1xM8");
+}
+
 pub mod add_missing_program_error_mappings {
     solana_sdk::declare_id!("3QEUpjhgPEt92nz3Mqf6pABkHPGCQwSvKtyGMq4SuQyL");
 }
@@ -185,6 +189,7 @@ lazy_static! {
         (keccak256_syscall_enabled::id(), "keccak256 syscall"),
         (stake_program_v4::id(), "solana_stake_program v4"),
         (memory_ops_syscalls::id(), "add syscalls for memory operations"),
+        (ed25519_sig_check_syscall_enabled::id(), "ed25519 sig check syscall"),
         (add_missing_program_error_mappings::id(), "add missing program error mappings"),
         (system_transfer_zero_check::id(), "perform all checks for transfers of 0 lamports"),
         (blake3_syscall_enabled::id(), "blake3 syscall"),

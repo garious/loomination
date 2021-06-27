@@ -4338,6 +4338,7 @@ version = "1.8.0"
 dependencies = [
  "bincode",
  "byteorder",
+ "ed25519-dalek",
  "log 0.4.11",
  "num-derive",
  "num-traits",
@@ -5248,6 +5249,7 @@ dependencies = [
  "bs58 0.4.0",
  "bv",
  "curve25519-dalek 3.1.0",
+ "ed25519-dalek",
  "hex",
  "itertools 0.10.1",
  "lazy_static",

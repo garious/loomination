@@ -19,6 +19,7 @@ log = "0.4.11"
 num-derive = "0.3"
 num-traits = "0.2"
 rand_core = "0.6.3"
+ed25519-dalek = "=1.0.1"
 sha3 = "0.9.1"
 solana-measure = { path = "../../measure", version = "=1.8.0" }
 solana-runtime = { path = "../../runtime", version = "=1.8.0" }
