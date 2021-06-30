@@ -1,5 +1,6 @@
 use crate::{alloc, BpfError};
 use alloc::Alloc;
+use ed25519_dalek::{ed25519::signature::Signature, Verifier};
 use solana_rbpf::{
     aligned_memory::AlignedMemory,
     ebpf::MM_HEAP_START,
@@ -16,12 +17,13 @@ use solana_sdk::{
     blake3, bpf_loader, bpf_loader_deprecated,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     clock::Clock,
+    ed25519_sig_check::Ed25519SigCheckError,
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     epoch_schedule::EpochSchedule,
     feature_set::{
         blake3_syscall_enabled, cpi_data_cost, demote_sysvar_write_locks,
-        enforce_aligned_host_addrs, keccak256_syscall_enabled, memory_ops_syscalls,
-        sysvar_via_syscall, update_data_on_realloc,
+        ed25519_sig_check_syscall_enabled, enforce_aligned_host_addrs, keccak256_syscall_enabled,
+        memory_ops_syscalls, sysvar_via_syscall, update_data_on_realloc,
     },
     hash::{Hasher, HASH_BYTES},
     ic_msg,
@@ -132,6 +134,11 @@ pub fn register_syscalls(
 
     if invoke_context.is_feature_active(&keccak256_syscall_enabled::id()) {
         syscall_registry.register_syscall_by_name(b"sol_keccak256", SyscallKeccak256::call)?;
+    }
+
+    if invoke_context.is_feature_active(&ed25519_sig_check_syscall_enabled::id()) {
+        syscall_registry
+            .register_syscall_by_name(b"sol_ed25519_sig_check", SyscallEd25519SigCheck::call)?;
     }
 
     if invoke_context.is_feature_active(&blake3_syscall_enabled::id()) {
@@ -326,6 +333,16 @@ pub fn bind_syscall_context_objects<'a>(
         Box::new(SyscallBlake3 {
             base_cost: bpf_compute_budget.sha256_base_cost,
             byte_cost: bpf_compute_budget.sha256_byte_cost,
+            compute_meter: invoke_context.get_compute_meter(),
+            loader_id,
+        }),
+    );
+
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        invoke_context.is_feature_active(&ed25519_sig_check_syscall_enabled::id()),
+        Box::new(SyscallEd25519SigCheck {
+            cost: bpf_compute_budget.ed25519_sig_check_cost,
             compute_meter: invoke_context.get_compute_meter(),
             loader_id,
         }),
@@ -1340,6 +1357,86 @@ impl<'a> SyscallObject<BpfError> for SyscallMemset<'a> {
             *val = c as u8;
         }
         *result = Ok(0);
+    }
+}
+
+/// sol_ed25519_sig_check
+pub struct SyscallEd25519SigCheck<'a> {
+    cost: u64,
+    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+    loader_id: &'a Pubkey,
+}
+
+impl<'a> SyscallObject<BpfError> for SyscallEd25519SigCheck<'a> {
+    fn call(
+        &mut self,
+        message_addr: u64,
+        message_len: u64,
+        signature_addr: u64,
+        publickey_addr: u64,
+        _arg5: u64,
+        memory_mapping: &MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        question_mark!(self.compute_meter.consume(self.cost), result);
+
+        let message = question_mark!(
+            translate_slice::<u8>(
+                memory_mapping,
+                message_addr,
+                message_len,
+                self.loader_id,
+                true,
+            ),
+            result
+        );
+
+        let signature = question_mark!(
+            translate_slice::<u8>(
+                memory_mapping,
+                signature_addr,
+                ed25519_dalek::SIGNATURE_LENGTH as u64,
+                self.loader_id,
+                true,
+            ),
+            result
+        );
+
+        let signature = match ed25519_dalek::Signature::from_bytes(signature) {
+            Ok(sig) => sig,
+            Err(_) => {
+                *result = Ok(Ed25519SigCheckError::InvalidSignature.into());
+                return;
+            }
+        };
+
+        let publickey = question_mark!(
+            translate_slice::<u8>(
+                memory_mapping,
+                publickey_addr,
+                ed25519_dalek::PUBLIC_KEY_LENGTH as u64,
+                self.loader_id,
+                true,
+            ),
+            result
+        );
+
+        let publickey = match ed25519_dalek::PublicKey::from_bytes(publickey) {
+            Ok(pubkey) => pubkey,
+            Err(_) => {
+                *result = Ok(Ed25519SigCheckError::InvalidPublicKey.into());
+                return;
+            }
+        };
+
+        match publickey.verify(message, &signature) {
+            Ok(_) => {
+                *result = Ok(SUCCESS);
+            }
+            Err(_) => {
+                *result = Ok(Ed25519SigCheckError::VerifyFailed.into());
+            }
+        }
     }
 }
 

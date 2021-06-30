@@ -181,6 +181,8 @@ pub struct BpfComputeBudget {
     pub cpi_bytes_per_unit: u64,
     /// Base number of compute units consumed to get a sysvar
     pub sysvar_base_cost: u64,
+    /// Number of compute units consumed to call sol_ed25519_sig_check
+    pub ed25519_sig_check_cost: u64,
 }
 impl Default for BpfComputeBudget {
     fn default() -> Self {
@@ -204,6 +206,7 @@ impl BpfComputeBudget {
             max_cpi_instruction_size: 1280, // IPv6 Min MTU size
             cpi_bytes_per_unit: 250,        // ~50MB at 200,000 units
             sysvar_base_cost: 100,
+            ed25519_sig_check_cost: 10_000,
         }
     }
 }

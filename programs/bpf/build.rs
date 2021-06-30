@@ -86,6 +86,7 @@ fn main() {
             "ro_modify",
             "ro_account_modify",
             "sanity",
+            "ed25519_sig_check",
             "sha",
             "spoof1",
             "spoof1_system",

@@ -1891,7 +1891,7 @@ dependencies = [
  "lazy_static",
  "percent-encoding",
  "pin-project",
- "rand 0.8.2",
+ "rand 0.8.4",
  "thiserror",
 ]
 
@@ -2179,9 +2179,9 @@ dependencies = [
 
 [[package]]
 name = "rand"
-version = "0.8.2"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "18519b42a40024d661e1714153e9ad0c3de27cd495760ceb09710920f1098b1e"
+checksum = "2e7573632e6454cf6b99d7aac4ccca54be06da05aca2ef7423d22d27d4d4bcd8"
 dependencies = [
  "libc",
  "rand_chacha 0.3.0",
@@ -2776,6 +2776,7 @@ version = "1.8.0"
 dependencies = [
  "bincode",
  "byteorder 1.4.3",
+ "ed25519-dalek",
  "log",
  "num-derive",
  "num-traits",
@@ -2795,11 +2796,13 @@ version = "1.8.0"
 dependencies = [
  "bincode",
  "byteorder 1.4.3",
+ "ed25519-dalek",
  "elf",
  "itertools 0.10.1",
  "log",
  "miow 0.3.7",
  "net2",
+ "rand 0.7.3",
  "solana-account-decoder",
  "solana-bpf-loader-program",
  "solana-cli-output",
@@ -3391,6 +3394,7 @@ dependencies = [
  "bs58 0.4.0",
  "bv",
  "curve25519-dalek 3.1.0",
+ "ed25519-dalek",
  "hex",
  "itertools 0.10.1",
  "lazy_static",
@@ -3816,7 +3820,7 @@ dependencies = [
  "humantime",
  "opentelemetry",
  "pin-project",
- "rand 0.8.2",
+ "rand 0.8.4",
  "serde",
  "static_assertions",
  "tarpc-plugins",
@@ -3847,7 +3851,7 @@ checksum = "dac1c663cfc93810f88aed9b8941d48cabf856a1b111c29a40439018d870eb22"
 dependencies = [
  "cfg-if 1.0.0",
  "libc",
- "rand 0.8.2",
+ "rand 0.8.4",
  "redox_syscall 0.2.4",
  "remove_dir_all",
  "winapi 0.3.8",
@@ -4309,7 +4313,7 @@ dependencies = [
  "input_buffer",
  "log",
  "native-tls",
- "rand 0.8.2",
+ "rand 0.8.4",
  "sha-1",
  "thiserror",
  "url",
