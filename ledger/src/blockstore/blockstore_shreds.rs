@@ -11,6 +11,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use std::{fs, io::Read, io::Seek, io::SeekFrom, io::Write};
 
 pub const SHRED_DIRECTORY: &str = "shreds";
+pub const SHRED_WAL_DIRECTORY: &str = "log";
 pub const DATA_SHRED_DIRECTORY: &str = "data";
 
 // TODO: revisit this value / correlate it to the cache size and/or flush interval
@@ -37,7 +38,7 @@ pub struct ShredWAL {
 
 impl ShredWAL {
     pub fn new(shred_db_path: &Path, max_shreds: usize) -> Result<ShredWAL> {
-        let wal_path = shred_db_path.join("wal");
+        let wal_path = shred_db_path.join(SHRED_WAL_DIRECTORY);
         fs::create_dir_all(&wal_path)?;
         let wal = Self {
             wal_path,
@@ -49,10 +50,10 @@ impl ShredWAL {
     }
 
     // Recover shreds from log files at specified path
-    fn recover(wal_path: &Path) -> Result<Vec<Shred>> {
-        assert!(wal_path.is_dir());
+    pub fn recover(&self) -> Result<Vec<Shred>> {
+        assert!(&self.wal_path.is_dir());
         let mut buffers = vec![];
-        let dir = fs::read_dir(wal_path)?;
+        let dir = fs::read_dir(&self.wal_path)?;
         for log in dir {
             // Log filenames are the timestamp at which they're created
             let log = log?;
@@ -60,7 +61,7 @@ impl ShredWAL {
             // if there is some unknown file in this directory
             let id: u64 = log.file_name().to_str().unwrap().parse().unwrap();
 
-            let path = Path::new(wal_path).join(id.to_string());
+            let path = self.wal_path.join(id.to_string());
             let mut file = fs::File::open(path)?;
             loop {
                 let mut buffer = vec![0; SHRED_PAYLOAD_SIZE];
@@ -237,10 +238,47 @@ impl Blockstore {
         Ok(())
     }
 
+    /// Purge an entire slot of data shreds
     pub(crate) fn purge_data_shreds(&self, slot: Slot) {
         self.data_shred_cache.remove(&slot);
         // Could get errors such as file doesn't exist; we don't care so just eat the error
         let _ = fs::remove_file(self.slot_data_shreds_path(slot));
+    }
+
+    /// Recover shreds from WAL(s) and re-establish consistent state in the blockstore
+    pub(crate) fn recover(&self) -> Result<()> {
+        let shred_wal = self.shred_wal.lock().unwrap();
+        let mut rec_shreds = shred_wal.recover()?;
+        let mut full_insert_shreds = vec![];
+        // There several possible scenarios for what we need to do with the shred
+        // 1) If the shred is in index ...
+        //    - If the shred is on disk, it is already accounted for and do nothing
+        //    - If the shred is not on disk, it was in memory and lost when process died.
+        //      So, re-insert it into the cache directly (to avoid having it in WAL twice)
+        // 2) If the shred is not in the index, perform a regular insert so the
+        //    the metadata is updated. Collect all of these until the end for perf.
+        while !rec_shreds.is_empty() {
+            let shred = rec_shreds.pop().unwrap();
+            let slot = shred.slot();
+            let index = shred.index() as u64;
+
+            // TODO: Would be better if we had something like BTreeMap<Slot, Vec<Shred>> so
+            // to reduce the number of calls to self.index_cf.get(slot)
+            let shred_index_opt = self.index_cf.get(slot)?;
+            match shred_index_opt {
+                Some(shred_index) => {
+                    // TODO: Maybe a helper that checks metadata but doesn't pull shred out
+                    let shred_on_disk = self.get_data_shred_from_fs(slot, index)?.is_some();
+                    if shred_index.data().is_present(index) && !shred_on_disk {
+                        self.insert_data_shred_into_cache(slot, index, &shred)
+                    }
+                }
+                None => full_insert_shreds.push(shred),
+            }
+        }
+        // TODO: is leader_schedule as None here ok ?
+        // self.insert_shreds(full_insert_shreds, None, false);
+        Ok(())
     }
 
     fn slot_data_shreds_path(&self, slot: Slot) -> String {

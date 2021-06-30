@@ -63,7 +63,7 @@ use trees::{Tree, TreeWalk};
 
 pub mod blockstore_purge;
 mod blockstore_shreds;
-use blockstore_shreds::{DATA_SHRED_DIRECTORY, SHRED_DIRECTORY};
+use blockstore_shreds::{ShredWAL, DATA_SHRED_DIRECTORY, DEFAULT_MAX_WAL_SHREDS, SHRED_DIRECTORY};
 
 pub const BLOCKSTORE_DIRECTORY: &str = "rocksdb";
 
@@ -156,6 +156,7 @@ pub struct Blockstore {
     slots_stats: Arc<Mutex<SlotsStats>>,
     data_shred_path: PathBuf,
     data_shred_cache: DashMap<Slot, Arc<RwLock<ShredCache>>>,
+    shred_wal: Mutex<ShredWAL>,
 }
 
 struct SlotsStats {
@@ -378,6 +379,9 @@ impl Blockstore {
             })
             .unwrap_or(0);
 
+        let shred_wal = ShredWAL::new(&shred_db_path, DEFAULT_MAX_WAL_SHREDS)?;
+        let shred_wal = Mutex::new(shred_wal);
+
         measure.stop();
         info!("{:?} {}", blockstore_path, measure);
         let blockstore = Blockstore {
@@ -408,10 +412,12 @@ impl Blockstore {
             slots_stats: Arc::new(Mutex::new(SlotsStats::default())),
             data_shred_path,
             data_shred_cache: DashMap::new(),
+            shred_wal,
         };
         if initialize_transaction_status_index {
             blockstore.initialize_transaction_status_index()?;
         }
+        blockstore.recover()?;
         Ok(blockstore)
     }
 
@@ -937,6 +943,12 @@ impl Blockstore {
                 num_inserted += 1;
             });
 
+        self.shred_wal
+            .lock()
+            .unwrap()
+            .write(&just_inserted_data_shreds)
+            .expect("Couldn't write shreds to WAL");
+
         let mut start = Measure::start("Shred recovery");
         // Handle chaining for the members of the slot_meta_working_set that were inserted into,
         // drop the others
@@ -1226,6 +1238,11 @@ impl Blockstore {
 
         if !is_trusted {
             if Self::is_data_shred_present(&shred, slot_meta, index_meta.data()) {
+                trace!(
+                    "shred not inserted into slot {} and index {}, shred is already present",
+                    shred.common_header.slot,
+                    shred.common_header.index
+                );
                 handle_duplicate(shred);
                 return Err(InsertDataShredError::Exists);
             }
@@ -1552,8 +1569,6 @@ impl Blockstore {
                 ("num_repaired", num_repaired, i64),
                 ("num_recovered", num_recovered, i64),
             );
-            // TODO: ONLY FOR TESTING, REMOVE THIS LATER
-            self.flush_data_shreds_for_slot_to_fs(slot)?;
         }
         trace!("inserted shred into slot {:?} and index {:?}", slot, index);
         Ok(newly_completed_data_sets)
@@ -3914,6 +3929,7 @@ pub mod tests {
 
     #[test]
     fn test_create_new_ledger() {
+        solana_logger::setup();
         let mint_total = 1_000_000_000_000;
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(mint_total);
         let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
