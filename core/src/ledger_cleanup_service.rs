@@ -13,17 +13,26 @@ use std::thread;
 use std::thread::{sleep, Builder, JoinHandle};
 use std::time::Duration;
 
-// - To try and keep the RocksDB size under 400GB:
-//   Seeing about 1600b/shred, using 2000b/shred for margin, so 200m shreds can be stored in 400gb.
-//   at 5k shreds/slot at 50k tps, this is 500k slots (~5 hours).
-//   At idle, 60 shreds/slot this is about 4m slots (18 days)
-// This is chosen to allow enough time for
-// - A validator to download a snapshot from a peer and boot from it
-// - To make sure that if a validator needs to reboot from its own snapshot, it has enough slots locally
-//   to catch back up to where it was when it stopped
+// Notes for calculations below:
+//  Using 2000b / shred (seeing about 1600b / shred; use 2000b for margin)
+//  Using 5k shreds / slot for 50k tps load
+//  Using 50 shreds / slot for idle load
+//  Using 400ms / slot as noted by constant SLOT_MS
+
+// Cap at 200m shreds, this is chosen to allow enough time to
+// - Ensure a validator can download a snapshot from a peer and boot from it
+// - Ensure that if a validator needs to reboot from its own snapshot, it has enough
+//   slots locally to catch back up to where it was when it stopped
+// 200m shred max gives ...
+//   ~400gb max ledger size
+//   200m / 5k = 40k slots (nearly 4.5 hours) at 50k tps load
+//   200m / 60 = 3.333m slots (15.43 days) at idle load
 pub const DEFAULT_MAX_LEDGER_SHREDS: u64 = 200_000_000;
 
-// Allow down to 50m, or 3.5 days at idle, 1hr at 50k load, around ~100GB
+// Allow down to 50m shreds; 50m shred max gives ...
+//   ~100gb max ledger size
+//   50m / 5k = 10k slots (just over 1 hour) at 50k tps load
+//   50m / 60 = 833k slots (3.85 days) at idle load
 pub const DEFAULT_MIN_MAX_LEDGER_SHREDS: u64 = 50_000_000;
 
 // Check for removing slots at this interval so we don't purge too often
