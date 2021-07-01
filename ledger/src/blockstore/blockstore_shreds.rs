@@ -281,6 +281,13 @@ impl Blockstore {
         Ok(())
     }
 
+    pub(crate) fn destroy_shreds(shred_db_path: &Path) -> Result<()> {
+        // fs::remove_dir_all() will fail if the path doesn't exist
+        fs::create_dir_all(&shred_db_path)?;
+        fs::remove_dir_all(&shred_db_path)?;
+        Ok(())
+    }
+
     pub(crate) fn shred_storage_size(&self) -> Result<u64> {
         Ok(fs_extra::dir::get_size(&self.ledger_path.join(SHRED_DIRECTORY))?)
     }

@@ -497,10 +497,12 @@ impl Blockstore {
     }
 
     pub fn destroy(ledger_path: &Path) -> Result<()> {
-        // Database::destroy() fails if the path doesn't exist
-        fs::create_dir_all(ledger_path)?;
+        // destroy() calls will fail if the path doesn't exist
         let blockstore_path = ledger_path.join(BLOCKSTORE_DIRECTORY);
-        Database::destroy(&blockstore_path)
+        let shred_path = ledger_path.join(SHRED_DIRECTORY);
+        fs::create_dir_all(&ledger_path)?;
+        Database::destroy(&blockstore_path)?;
+        Self::destroy_shreds(&shred_path)
     }
 
     pub fn meta(&self, slot: Slot) -> Result<Option<SlotMeta>> {
@@ -3944,6 +3946,25 @@ pub mod tests {
 
         // Destroying database without closing it first is undefined behavior
         drop(ledger);
+        Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn test_double_destroy_ledger() {
+        let ledger_path = get_tmp_ledger_path!();
+        let ledger = Blockstore::open(&ledger_path).unwrap();
+
+        // Create some entries; just want some data to be inserted
+        let num_entries = max_ticks_per_n_shreds(1, None);
+        assert!(num_entries > 0);
+
+        let (shreds, _) = make_slot_entries(0, 0, num_entries);
+        ledger.insert_shreds(shreds, None, false).unwrap();
+
+        // Destroying database without closing it first is undefined behavior
+        drop(ledger);
+        // Destroy twice to ensure that destruction on non-existent blockstore is graceful
+        Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
         Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 
