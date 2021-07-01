@@ -74,8 +74,7 @@ test-stable-perf)
   _ "$cargo" stable run --manifest-path poh-bench/Cargo.toml ${V:+--verbose} -- --hashes-per-tick 10
   ;;
 test-local-cluster)
-  _ "$cargo" stable build --release --bins ${V:+--verbose}
-  _ "$cargo" stable test --release --package solana-local-cluster ${V:+--verbose} -- --nocapture --test-threads=1
+  _ "$cargo" stable test --release --package solana-local-cluster ${V:+--verbose} optimistic_confirmation -- --nocapture --test-threads=1
   exit 0
   ;;
 *)

@@ -18,11 +18,12 @@ use {
         crds_gossip_error::CrdsGossipError,
         crds_value::CrdsValue,
         ping_pong::PingCache,
+        weighted_shuffle::weighted_shuffle,
     },
     itertools::Itertools,
     lru::LruCache,
     rand::{
-        distributions::{Distribution, WeightedIndex},
+        // distributions::{Distribution, WeightedIndex},
         Rng,
     },
     rayon::{prelude::*, ThreadPool},
@@ -239,10 +240,14 @@ impl CrdsGossipPull {
         }
         let mut peers = {
             let mut rng = rand::thread_rng();
-            let num_samples = peers.len() * 2;
-            let index = WeightedIndex::new(weights).unwrap();
-            let sample_peer = move || peers[index.sample(&mut rng)];
-            repeat_with(sample_peer).take(num_samples)
+            let mut seed = [0u8; 32];
+            rng.fill(&mut seed[..]);
+            let index = weighted_shuffle(&weights, seed);
+            index.into_iter().map(|i| peers[i])
+            // let num_samples = peers.len() * 2;
+            // let index = WeightedIndex::new(weights).unwrap();
+            // let sample_peer = move || peers[index.sample(&mut rng)];
+            // repeat_with(sample_peer).take(num_samples)
         };
         let peer = {
             let mut rng = rand::thread_rng();

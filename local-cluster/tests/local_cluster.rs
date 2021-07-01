@@ -2851,14 +2851,12 @@ fn test_hard_fork_invalidates_tower() {
 
 #[test]
 #[serial]
-#[ignore]
 fn test_no_optimistic_confirmation_violation_with_tower() {
     do_test_optimistic_confirmation_violation_with_or_without_tower(true);
 }
 
 #[test]
 #[serial]
-#[ignore]
 fn test_optimistic_confirmation_violation_without_tower() {
     do_test_optimistic_confirmation_violation_with_or_without_tower(false);
 }

@@ -125,95 +125,6 @@ wait_step() {
 }
 
 all_test_steps() {
-  command_step checks ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-checks.sh" 20
-  wait_step
-
-  # Coverage...
-  if affects \
-             .rs$ \
-             Cargo.lock$ \
-             Cargo.toml$ \
-             ^ci/rust-version.sh \
-             ^ci/test-coverage.sh \
-             ^scripts/coverage.sh \
-      ; then
-    command_step coverage ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-coverage.sh" 30
-    wait_step
-  else
-    annotate --style info --context test-coverage \
-      "Coverage skipped as no .rs files were modified"
-  fi
-
-  # Full test suite
-  command_step stable ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-stable.sh" 60
-  wait_step
-
-  # Perf test suite
-  if affects \
-             .rs$ \
-             Cargo.lock$ \
-             Cargo.toml$ \
-             ^ci/rust-version.sh \
-             ^ci/test-stable-perf.sh \
-             ^ci/test-stable.sh \
-             ^ci/test-local-cluster.sh \
-             ^core/build.rs \
-             ^fetch-perf-libs.sh \
-             ^programs/ \
-             ^sdk/ \
-      ; then
-    cat >> "$output_file" <<"EOF"
-  - command: "ci/test-stable-perf.sh"
-    name: "stable-perf"
-    timeout_in_minutes: 40
-    artifact_paths: "log-*.txt"
-    agents:
-      - "queue=cuda"
-EOF
-  else
-    annotate --style info \
-      "Stable-perf skipped as no relevant files were modified"
-  fi
-
-  # Downstream backwards compatibility
-  if affects \
-             .rs$ \
-             Cargo.lock$ \
-             Cargo.toml$ \
-             ^ci/rust-version.sh \
-             ^ci/test-stable-perf.sh \
-             ^ci/test-stable.sh \
-             ^ci/test-local-cluster.sh \
-             ^core/build.rs \
-             ^fetch-perf-libs.sh \
-             ^programs/ \
-             ^sdk/ \
-             ^scripts/build-downstream-projects.sh \
-      ; then
-    cat >> "$output_file" <<"EOF"
-  - command: "scripts/build-downstream-projects.sh"
-    name: "downstream-projects"
-    timeout_in_minutes: 30
-EOF
-  else
-    annotate --style info \
-      "downstream-projects skipped as no relevant files were modified"
-  fi
-  # Benches...
-  if affects \
-             .rs$ \
-             Cargo.lock$ \
-             Cargo.toml$ \
-             ^ci/rust-version.sh \
-             ^ci/test-coverage.sh \
-             ^ci/test-bench.sh \
-      ; then
-    command_step bench "ci/test-bench.sh" 30
-  else
-    annotate --style info --context test-bench \
-      "Bench skipped as no .rs files were modified"
-  fi
-
   command_step "local-cluster" \
     ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-local-cluster.sh" \
     45
@@ -224,10 +135,6 @@ pull_or_push_steps() {
   wait_step
 
   # Check for any .sh file changes
-  if affects .sh$; then
-    command_step shellcheck "ci/shellcheck.sh" 5
-    wait_step
-  fi
 
   # Run the full test suite by default, skipping only if modifications are local
   # to some particular areas of the tree
