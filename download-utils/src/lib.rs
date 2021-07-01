@@ -2,7 +2,7 @@
 use console::Emoji;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::*;
-use solana_runtime::{bank_forks::ArchiveFormat, snapshot_utils};
+use solana_runtime::{snapshot_utils, snapshot_utils::ArchiveFormat};
 use solana_sdk::{clock::Slot, genesis_config::DEFAULT_GENESIS_ARCHIVE, hash::Hash};
 use std::fs::{self, File};
 use std::io;

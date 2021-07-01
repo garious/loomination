@@ -1,5 +1,9 @@
 use solana_gossip::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES};
-use solana_runtime::{snapshot_package::AccountsPackage, snapshot_utils};
+use solana_runtime::{
+    snapshot_package::AccountsPackage,
+    snapshot_runtime_info::{self, SyncSnapshotRuntimeInfo},
+    snapshot_utils,
+};
 use solana_sdk::{clock::Slot, hash::Hash};
 use std::{
     sync::{
@@ -23,6 +27,7 @@ impl SnapshotPackagerService {
         exit: &Arc<AtomicBool>,
         cluster_info: &Arc<ClusterInfo>,
         maximum_snapshots_to_retain: usize,
+        snapshot_runtime_info: Option<SyncSnapshotRuntimeInfo>,
     ) -> Self {
         let exit = exit.clone();
         let cluster_info = cluster_info.clone();
@@ -48,6 +53,12 @@ impl SnapshotPackagerService {
                         ) {
                             warn!("Failed to create snapshot archive: {}", err);
                         } else {
+                            // At this point a full snapshot has successfully been taken, so update the SnapshotRuntimeInfo.
+                            snapshot_runtime_info::set_last_full_snapshot_slot(
+                                snapshot_runtime_info.as_ref(),
+                                snapshot_package.slot,
+                            );
+
                             hashes.push((snapshot_package.slot, snapshot_package.hash));
                             while hashes.len() > MAX_SNAPSHOT_HASHES {
                                 hashes.remove(0);
@@ -78,9 +89,8 @@ mod tests {
     use solana_runtime::{
         accounts_db::AccountStorageEntry,
         bank::BankSlotDelta,
-        bank_forks::ArchiveFormat,
         snapshot_package::AccountsPackage,
-        snapshot_utils::{self, SnapshotVersion, SNAPSHOT_STATUS_CACHE_FILE_NAME},
+        snapshot_utils::{self, ArchiveFormat, SnapshotVersion, SNAPSHOT_STATUS_CACHE_FILE_NAME},
     };
     use solana_sdk::hash::Hash;
     use std::{

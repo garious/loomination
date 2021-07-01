@@ -9,8 +9,10 @@ use crate::{
 };
 use log::*;
 use solana_runtime::{
-    bank_forks::{ArchiveFormat, BankForks, SnapshotConfig},
-    snapshot_utils,
+    bank_forks::BankForks,
+    snapshot_config::SnapshotConfig,
+    snapshot_runtime_info::SyncSnapshotRuntimeInfo,
+    snapshot_utils::{self, ArchiveFormat},
 };
 use solana_sdk::{clock::Slot, genesis_config::GenesisConfig, hash::Hash};
 use std::{fs, path::PathBuf, process, result};
@@ -42,6 +44,7 @@ pub fn load(
     process_options: ProcessOptions,
     transaction_status_sender: Option<&TransactionStatusSender>,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
+    snapshot_runtime_info: Option<SyncSnapshotRuntimeInfo>,
 ) -> LoadResult {
     if let Some(snapshot_config) = snapshot_config.as_ref() {
         info!(
@@ -70,6 +73,7 @@ pub fn load(
                 archive_slot,
                 archive_hash,
                 archive_format,
+                snapshot_runtime_info,
             );
         } else {
             info!("No snapshot package available; will load from genesis");
@@ -121,6 +125,7 @@ fn load_from_snapshot(
     archive_slot: Slot,
     archive_hash: Hash,
     archive_format: ArchiveFormat,
+    snapshot_runtime_info: Option<SyncSnapshotRuntimeInfo>,
 ) -> LoadResult {
     info!("Loading snapshot package: {:?}", archive_filename);
 
@@ -144,6 +149,7 @@ fn load_from_snapshot(
         process_options.limit_load_slot_count_from_snapshot,
         process_options.shrink_ratio,
         process_options.accounts_db_test_hash_calculation,
+        snapshot_runtime_info,
     )
     .expect("Load from snapshot failed");
     if let Some(shrink_paths) = shrink_paths {

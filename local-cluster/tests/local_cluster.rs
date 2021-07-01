@@ -37,8 +37,9 @@ use solana_local_cluster::{
     validator_configs::*,
 };
 use solana_runtime::{
-    bank_forks::{ArchiveFormat, SnapshotConfig},
-    snapshot_utils,
+    snapshot_config::SnapshotConfig,
+    snapshot_runtime_info::SyncSnapshotRuntimeInfo,
+    snapshot_utils::{self, ArchiveFormat},
 };
 use solana_sdk::{
     account::AccountSharedData,
@@ -3173,6 +3174,7 @@ fn setup_snapshot_validator_config(
         archive_format: ArchiveFormat::TarBzip2,
         snapshot_version: snapshot_utils::SnapshotVersion::default(),
         maximum_snapshots_to_retain: snapshot_utils::DEFAULT_MAX_SNAPSHOTS_TO_RETAIN,
+        snapshot_runtime_info: SyncSnapshotRuntimeInfo::default(),
     };
 
     // Create the account paths

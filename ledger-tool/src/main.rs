@@ -27,10 +27,11 @@ use solana_ledger::{
 };
 use solana_runtime::{
     bank::{Bank, RewardCalculationEvent},
-    bank_forks::{ArchiveFormat, BankForks, SnapshotConfig},
+    bank_forks::BankForks,
     hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
-    snapshot_utils,
-    snapshot_utils::{SnapshotVersion, DEFAULT_MAX_SNAPSHOTS_TO_RETAIN},
+    snapshot_config::SnapshotConfig,
+    snapshot_runtime_info::SyncSnapshotRuntimeInfo,
+    snapshot_utils::{self, ArchiveFormat, SnapshotVersion, DEFAULT_MAX_SNAPSHOTS_TO_RETAIN},
 };
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount, WritableAccount},
@@ -692,6 +693,7 @@ fn load_bank_forks(
             archive_format: ArchiveFormat::TarBzip2,
             snapshot_version: SnapshotVersion::default(),
             maximum_snapshots_to_retain: DEFAULT_MAX_SNAPSHOTS_TO_RETAIN,
+            snapshot_runtime_info: SyncSnapshotRuntimeInfo::default(),
         })
     };
     let account_paths = if let Some(account_paths) = arg_matches.value_of("account_paths") {
@@ -720,6 +722,7 @@ fn load_bank_forks(
         None,
         snapshot_config.as_ref(),
         process_options,
+        None,
         None,
         None,
     )

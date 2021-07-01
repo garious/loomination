@@ -23,8 +23,7 @@ use {
     solana_metrics::inc_new_counter_info,
     solana_poh::poh_recorder::PohRecorder,
     solana_runtime::{
-        bank_forks::{BankForks, SnapshotConfig},
-        commitment::BlockCommitmentCache,
+        bank_forks::BankForks, commitment::BlockCommitmentCache, snapshot_config::SnapshotConfig,
         snapshot_utils,
     },
     solana_sdk::{
@@ -490,8 +489,9 @@ mod tests {
             get_tmp_ledger_path,
         },
         solana_runtime::{
-            bank::Bank, bank_forks::ArchiveFormat, snapshot_utils::SnapshotVersion,
-            snapshot_utils::DEFAULT_MAX_SNAPSHOTS_TO_RETAIN,
+            bank::Bank,
+            snapshot_runtime_info::SyncSnapshotRuntimeInfo,
+            snapshot_utils::{ArchiveFormat, SnapshotVersion, DEFAULT_MAX_SNAPSHOTS_TO_RETAIN},
         },
         solana_sdk::{
             genesis_config::{ClusterType, DEFAULT_GENESIS_ARCHIVE},
@@ -598,6 +598,7 @@ mod tests {
                 archive_format: ArchiveFormat::TarBzip2,
                 snapshot_version: SnapshotVersion::default(),
                 maximum_snapshots_to_retain: DEFAULT_MAX_SNAPSHOTS_TO_RETAIN,
+                snapshot_runtime_info: SyncSnapshotRuntimeInfo::default(),
             }),
             bank_forks,
             RpcHealth::stub(),

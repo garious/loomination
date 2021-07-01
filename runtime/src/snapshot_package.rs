@@ -1,5 +1,4 @@
-use crate::bank_forks::ArchiveFormat;
-use crate::snapshot_utils::SnapshotVersion;
+use crate::snapshot_utils::{ArchiveFormat, SnapshotVersion};
 use crate::{accounts_db::SnapshotStorages, bank::BankSlotDelta};
 use solana_sdk::clock::Slot;
 use solana_sdk::genesis_config::ClusterType;

@@ -66,6 +66,7 @@ fn main() {
         AccountSecondaryIndexes::default(),
         false,
         AccountShrinkThreshold::default(),
+        None,
     );
     println!("Creating {} accounts", num_accounts);
     let mut create_time = Measure::start("create accounts");

@@ -4,7 +4,8 @@
 
 use crate::{
     bank::{Bank, BankSlotDelta, DropCallback},
-    bank_forks::{BankForks, SnapshotConfig},
+    bank_forks::BankForks,
+    snapshot_config::SnapshotConfig,
     snapshot_package::AccountsPackageSender,
     snapshot_utils,
 };

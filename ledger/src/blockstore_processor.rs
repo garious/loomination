@@ -407,6 +407,7 @@ pub fn process_blockstore(
         opts.accounts_db_caching_enabled,
         opts.shrink_ratio,
         false,
+        None,
     );
     let bank0 = Arc::new(bank0);
     info!("processing ledger for slot 0...");
@@ -3117,6 +3118,7 @@ pub mod tests {
             false,
             AccountShrinkThreshold::default(),
             false,
+            None,
         );
         *bank.epoch_schedule()
     }

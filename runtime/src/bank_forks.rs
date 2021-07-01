@@ -3,6 +3,7 @@
 use crate::{
     accounts_background_service::{AbsRequestSender, SnapshotRequest},
     bank::Bank,
+    snapshot_config::SnapshotConfig,
 };
 use log::*;
 use solana_metrics::inc_new_counter_info;
@@ -10,40 +11,9 @@ use solana_sdk::{clock::Slot, hash::Hash, timing};
 use std::{
     collections::{hash_map::Entry, HashMap, HashSet},
     ops::Index,
-    path::PathBuf,
     sync::Arc,
     time::Instant,
 };
-
-pub use crate::snapshot_utils::SnapshotVersion;
-
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum ArchiveFormat {
-    TarBzip2,
-    TarGzip,
-    TarZstd,
-    Tar,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct SnapshotConfig {
-    // Generate a new snapshot every this many slots
-    pub snapshot_interval_slots: u64,
-
-    // Where to store the latest packaged snapshot
-    pub snapshot_package_output_path: PathBuf,
-
-    // Where to place the snapshots for recent slots
-    pub snapshot_path: PathBuf,
-
-    pub archive_format: ArchiveFormat,
-
-    // Snapshot version to generate
-    pub snapshot_version: SnapshotVersion,
-
-    // Maximum number of snapshots to retain
-    pub maximum_snapshots_to_retain: usize,
-}
 
 pub struct BankForks {
     banks: HashMap<Slot, Arc<Bank>>,

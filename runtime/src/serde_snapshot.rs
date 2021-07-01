@@ -14,6 +14,7 @@ use {
         message_processor::MessageProcessor,
         rent_collector::RentCollector,
         serde_snapshot::future::SerializableStorage,
+        snapshot_runtime_info::SyncSnapshotRuntimeInfo,
         stakes::Stakes,
     },
     bincode,
@@ -140,6 +141,7 @@ pub(crate) fn bank_from_stream<R>(
     caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
+    snapshot_runtime_info: Option<SyncSnapshotRuntimeInfo>,
 ) -> std::result::Result<Bank, Error>
 where
     R: Read,
@@ -161,6 +163,7 @@ where
                 caching_enabled,
                 limit_load_slot_count_from_snapshot,
                 shrink_ratio,
+                snapshot_runtime_info,
             )?;
             Ok(bank)
         }};
@@ -252,6 +255,7 @@ fn reconstruct_bank_from_fields<E>(
     caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
+    snapshot_runtime_info: Option<SyncSnapshotRuntimeInfo>,
 ) -> Result<Bank, Error>
 where
     E: SerializableStorage + std::marker::Sync,
@@ -265,6 +269,7 @@ where
         caching_enabled,
         limit_load_slot_count_from_snapshot,
         shrink_ratio,
+        snapshot_runtime_info,
     )?;
     accounts_db.freeze_accounts(
         &Ancestors::from(&bank_fields.ancestors),
@@ -314,6 +319,7 @@ fn reconstruct_accountsdb_from_fields<E>(
     caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
+    snapshot_runtime_info: Option<SyncSnapshotRuntimeInfo>,
 ) -> Result<AccountsDb, Error>
 where
     E: SerializableStorage + std::marker::Sync,
@@ -324,6 +330,7 @@ where
         account_indexes,
         caching_enabled,
         shrink_ratio,
+        snapshot_runtime_info,
     );
     let AccountsDbFields(storage, version, slot, bank_hash_info) = accounts_db_fields;
 

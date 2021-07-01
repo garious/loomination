@@ -46,9 +46,13 @@ use {
         accounts_index::{
             AccountIndex, AccountSecondaryIndexes, AccountSecondaryIndexesIncludeExclude,
         },
-        bank_forks::{ArchiveFormat, SnapshotConfig, SnapshotVersion},
         hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
-        snapshot_utils::{get_highest_snapshot_archive_path, DEFAULT_MAX_SNAPSHOTS_TO_RETAIN},
+        snapshot_config::SnapshotConfig,
+        snapshot_runtime_info::SyncSnapshotRuntimeInfo,
+        snapshot_utils::{
+            get_highest_snapshot_archive_path, ArchiveFormat, SnapshotVersion,
+            DEFAULT_MAX_SNAPSHOTS_TO_RETAIN,
+        },
     },
     solana_sdk::{
         clock::{Slot, DEFAULT_S_PER_SLOT},
@@ -2398,6 +2402,7 @@ pub fn main() {
         archive_format,
         snapshot_version,
         maximum_snapshots_to_retain,
+        snapshot_runtime_info: SyncSnapshotRuntimeInfo::default(),
     });
 
     validator_config.accounts_hash_interval_slots =

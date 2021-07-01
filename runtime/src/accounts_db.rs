@@ -31,6 +31,7 @@ use crate::{
     contains::Contains,
     pubkey_bins::PubkeyBinCalculator16,
     read_only_accounts_cache::ReadOnlyAccountsCache,
+    snapshot_runtime_info::SyncSnapshotRuntimeInfo,
     sorted_storages::SortedStorages,
 };
 use blake3::traits::digest::Digest;
@@ -952,6 +953,9 @@ pub struct AccountsDb {
     /// such that potentially a 0-lamport account update could be present which
     /// means we can remove the account from the index entirely.
     dirty_stores: DashMap<(Slot, AppendVecId), Arc<AccountStorageEntry>>,
+
+    /// Shared runtime snapshot information
+    snapshot_runtime_info: Option<SyncSnapshotRuntimeInfo>,
 }
 
 #[derive(Debug, Default)]
@@ -1397,6 +1401,7 @@ impl Default for AccountsDb {
             remove_unrooted_slots_synchronization: RemoveUnrootedSlotsSynchronization::default(),
             shrink_ratio: AccountShrinkThreshold::default(),
             dirty_stores: DashMap::default(),
+            snapshot_runtime_info: None,
         }
     }
 }
@@ -1412,6 +1417,7 @@ impl AccountsDb {
             AccountSecondaryIndexes::default(),
             false,
             AccountShrinkThreshold::default(),
+            None,
         )
     }
 
@@ -1421,6 +1427,7 @@ impl AccountsDb {
         account_indexes: AccountSecondaryIndexes,
         caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
+        snapshot_runtime_info: Option<SyncSnapshotRuntimeInfo>,
     ) -> Self {
         let mut new = if !paths.is_empty() {
             Self {
@@ -1430,6 +1437,7 @@ impl AccountsDb {
                 account_indexes,
                 caching_enabled,
                 shrink_ratio,
+                snapshot_runtime_info,
                 ..Self::default()
             }
         } else {
@@ -1443,6 +1451,7 @@ impl AccountsDb {
                 account_indexes,
                 caching_enabled,
                 shrink_ratio,
+                snapshot_runtime_info,
                 ..Self::default()
             }
         };
@@ -6073,6 +6082,11 @@ impl AccountsDb {
             }
         }
     }
+
+    /// Get the shared runtime snapshot information
+    pub(crate) fn snapshot_runtime_info(&self) -> Option<&SyncSnapshotRuntimeInfo> {
+        self.snapshot_runtime_info.as_ref()
+    }
 }
 
 #[cfg(test)]
@@ -7755,6 +7769,7 @@ pub mod tests {
             spl_token_mint_index_enabled(),
             false,
             AccountShrinkThreshold::default(),
+            None,
         );
         let pubkey1 = solana_sdk::pubkey::new_rand();
         let pubkey2 = solana_sdk::pubkey::new_rand();
@@ -9900,6 +9915,7 @@ pub mod tests {
             AccountSecondaryIndexes::default(),
             true,
             AccountShrinkThreshold::default(),
+            None,
         );
 
         let account = AccountSharedData::new(1, 16 * 4096, &Pubkey::default());
@@ -10211,6 +10227,7 @@ pub mod tests {
             AccountSecondaryIndexes::default(),
             caching_enabled,
             AccountShrinkThreshold::default(),
+            None,
         ));
 
         let account_key = Pubkey::new_unique();
@@ -10259,6 +10276,7 @@ pub mod tests {
             AccountSecondaryIndexes::default(),
             caching_enabled,
             AccountShrinkThreshold::default(),
+            None,
         ));
 
         let account_key = Pubkey::new_unique();
@@ -10308,6 +10326,7 @@ pub mod tests {
             AccountSecondaryIndexes::default(),
             caching_enabled,
             AccountShrinkThreshold::default(),
+            None,
         ));
 
         let zero_lamport_account_key = Pubkey::new_unique();
@@ -10443,6 +10462,7 @@ pub mod tests {
             AccountSecondaryIndexes::default(),
             caching_enabled,
             AccountShrinkThreshold::default(),
+            None,
         ));
         let account_key = Pubkey::new_unique();
         let account_key2 = Pubkey::new_unique();
@@ -10550,6 +10570,7 @@ pub mod tests {
             AccountSecondaryIndexes::default(),
             caching_enabled,
             AccountShrinkThreshold::default(),
+            None,
         );
         let slot: Slot = 0;
         let num_keys = 10;
@@ -10605,6 +10626,7 @@ pub mod tests {
             AccountSecondaryIndexes::default(),
             caching_enabled,
             AccountShrinkThreshold::default(),
+            None,
         ));
         let slots: Vec<_> = (0..num_slots as Slot).into_iter().collect();
         let stall_slot = num_slots as Slot;
@@ -11010,6 +11032,7 @@ pub mod tests {
             AccountSecondaryIndexes::default(),
             caching_enabled,
             AccountShrinkThreshold::default(),
+            None,
         );
         let account_key1 = Pubkey::new_unique();
         let account_key2 = Pubkey::new_unique();
@@ -11267,6 +11290,7 @@ pub mod tests {
             AccountSecondaryIndexes::default(),
             caching_enabled,
             AccountShrinkThreshold::default(),
+            None,
         );
         db.load_delay = RACY_SLEEP_MS;
         let db = Arc::new(db);
@@ -11339,6 +11363,7 @@ pub mod tests {
             AccountSecondaryIndexes::default(),
             caching_enabled,
             AccountShrinkThreshold::default(),
+            None,
         );
         db.load_delay = RACY_SLEEP_MS;
         let db = Arc::new(db);
@@ -11415,6 +11440,7 @@ pub mod tests {
             AccountSecondaryIndexes::default(),
             caching_enabled,
             AccountShrinkThreshold::default(),
+            None,
         );
         let db = Arc::new(db);
         let num_cached_slots = 100;

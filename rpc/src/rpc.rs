@@ -44,10 +44,11 @@ use {
         accounts::AccountAddressFilter,
         accounts_index::{AccountIndex, AccountSecondaryIndexes, IndexKey},
         bank::Bank,
-        bank_forks::{BankForks, SnapshotConfig},
+        bank_forks::BankForks,
         commitment::{BlockCommitmentArray, BlockCommitmentCache, CommitmentSlots},
         inline_spl_token_v2_0::{SPL_TOKEN_ACCOUNT_MINT_OFFSET, SPL_TOKEN_ACCOUNT_OWNER_OFFSET},
         non_circulating_supply::calculate_non_circulating_supply,
+        snapshot_config::SnapshotConfig,
         snapshot_utils::get_highest_snapshot_archive_path,
     },
     solana_sdk::{

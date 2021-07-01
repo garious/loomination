@@ -3,7 +3,6 @@ use {
         accounts_db::{AccountShrinkThreshold, AccountsDb},
         accounts_index::AccountSecondaryIndexes,
         bank::{Bank, BankSlotDelta, Builtins},
-        bank_forks::ArchiveFormat,
         hardened_unpack::{unpack_snapshot, ParallelSelector, UnpackError, UnpackedAppendVecMap},
         serde_snapshot::{
             bank_from_stream, bank_to_stream, SerdeStyle, SnapshotStorage, SnapshotStorages,
@@ -11,6 +10,7 @@ use {
         snapshot_package::{
             AccountsPackage, AccountsPackagePre, AccountsPackageSendError, AccountsPackageSender,
         },
+        snapshot_runtime_info::{self, SyncSnapshotRuntimeInfo},
         sorted_storages::SortedStorages,
     },
     bincode::{config::Options, serialize_into},
@@ -101,6 +101,15 @@ impl SnapshotVersion {
     fn maybe_from_string(version_string: &str) -> Option<SnapshotVersion> {
         version_string.parse::<Self>().ok()
     }
+}
+
+/// The different archive formats used for snapshots
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum ArchiveFormat {
+    TarBzip2,
+    TarGzip,
+    TarZstd,
+    Tar,
 }
 
 #[derive(PartialEq, Eq, Debug)]
@@ -617,6 +626,7 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
     test_hash_calculation: bool,
+    snapshot_runtime_info: Option<SyncSnapshotRuntimeInfo>,
 ) -> Result<(Bank, BankFromArchiveTimings)> {
     let unpack_dir = tempfile::Builder::new()
         .prefix(TMP_SNAPSHOT_PREFIX)
@@ -657,7 +667,13 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
         accounts_db_caching_enabled,
         limit_load_slot_count_from_snapshot,
         shrink_ratio,
+        snapshot_runtime_info.clone(),
     )?;
+
+    // Since `bank.verify_snapshot_bank()` (below) eventually calls `AccountsDb::clean_accounts()`,
+    // the full snapshot slot must be set and known to AccountsDb beforehand.
+    snapshot_runtime_info::set_last_full_snapshot_slot(snapshot_runtime_info.as_ref(), bank.slot());
+
     measure.stop();
 
     let mut verify = Measure::start("verify");
@@ -884,6 +900,7 @@ fn rebuild_bank_from_snapshots(
     accounts_db_caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
+    snapshot_runtime_info: Option<SyncSnapshotRuntimeInfo>,
 ) -> Result<Bank> {
     let (snapshot_version_enum, root_paths) =
         verify_snapshot_version_and_folder(snapshot_version, unpacked_snapshots_dir)?;
@@ -906,6 +923,7 @@ fn rebuild_bank_from_snapshots(
                 accounts_db_caching_enabled,
                 limit_load_slot_count_from_snapshot,
                 shrink_ratio,
+                snapshot_runtime_info,
             ),
         }?)
     })?;
@@ -1064,6 +1082,13 @@ pub fn bank_to_snapshot_archive<P: AsRef<Path>, Q: AsRef<Path>>(
     let package = process_accounts_package_pre(package, thread_pool);
 
     archive_snapshot_package(&package, maximum_snapshots_to_retain)?;
+
+    // At this point a full snapshot has successfully been taken, so update the SnapshotRuntimeInfo.
+    snapshot_runtime_info::set_last_full_snapshot_slot(
+        bank.rc.accounts.accounts_db.snapshot_runtime_info(),
+        bank.slot(),
+    );
+
     Ok(package.tar_output_file)
 }
 

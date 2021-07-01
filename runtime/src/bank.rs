@@ -50,6 +50,7 @@ use crate::{
     log_collector::LogCollector,
     message_processor::{ExecuteDetailsTimings, Executors, MessageProcessor},
     rent_collector::RentCollector,
+    snapshot_runtime_info::SyncSnapshotRuntimeInfo,
     stake_weighted_timestamp::{
         calculate_stake_weighted_timestamp, MaxAllowableDrift, MAX_ALLOWABLE_DRIFT_PERCENTAGE,
         MAX_ALLOWABLE_DRIFT_PERCENTAGE_FAST, MAX_ALLOWABLE_DRIFT_PERCENTAGE_SLOW,
@@ -1020,6 +1021,7 @@ impl Bank {
             false,
             AccountShrinkThreshold::default(),
             false,
+            None,
         )
     }
 
@@ -1034,6 +1036,7 @@ impl Bank {
             false,
             AccountShrinkThreshold::default(),
             false,
+            None,
         );
 
         bank.ns_per_slot = std::u128::MAX;
@@ -1057,9 +1060,11 @@ impl Bank {
             accounts_db_caching_enabled,
             shrink_ratio,
             false,
+            None,
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn new_with_paths(
         genesis_config: &GenesisConfig,
         paths: Vec<PathBuf>,
@@ -1070,6 +1075,7 @@ impl Bank {
         accounts_db_caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
         debug_do_not_add_builtins: bool,
+        snapshot_runtime_info: Option<SyncSnapshotRuntimeInfo>,
     ) -> Self {
         let mut bank = Self::default();
         bank.ancestors = Ancestors::from(vec![bank.slot()]);
@@ -1082,6 +1088,7 @@ impl Bank {
             account_indexes,
             accounts_db_caching_enabled,
             shrink_ratio,
+            snapshot_runtime_info,
         ));
         bank.process_genesis_config(genesis_config);
         bank.finish_init(

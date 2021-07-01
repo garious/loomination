@@ -217,8 +217,7 @@ impl AccountsHashVerifier {
 mod tests {
     use super::*;
     use solana_gossip::{cluster_info::make_accounts_hashes_message, contact_info::ContactInfo};
-    use solana_runtime::bank_forks::ArchiveFormat;
-    use solana_runtime::snapshot_utils::SnapshotVersion;
+    use solana_runtime::snapshot_utils::{ArchiveFormat, SnapshotVersion};
     use solana_sdk::{
         hash::hash,
         signature::{Keypair, Signer},

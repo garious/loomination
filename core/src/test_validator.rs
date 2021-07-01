@@ -6,10 +6,11 @@ use {
     solana_net_utils::PortRange,
     solana_rpc::rpc::JsonRpcConfig,
     solana_runtime::{
-        bank_forks::{ArchiveFormat, SnapshotConfig, SnapshotVersion},
         genesis_utils::create_genesis_config_with_leader_ex,
         hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
-        snapshot_utils::DEFAULT_MAX_SNAPSHOTS_TO_RETAIN,
+        snapshot_config::SnapshotConfig,
+        snapshot_runtime_info::SyncSnapshotRuntimeInfo,
+        snapshot_utils::{ArchiveFormat, SnapshotVersion, DEFAULT_MAX_SNAPSHOTS_TO_RETAIN},
     },
     solana_sdk::{
         account::{Account, AccountSharedData},
@@ -489,6 +490,7 @@ impl TestValidator {
                 archive_format: ArchiveFormat::Tar,
                 snapshot_version: SnapshotVersion::default(),
                 maximum_snapshots_to_retain: DEFAULT_MAX_SNAPSHOTS_TO_RETAIN,
+                snapshot_runtime_info: SyncSnapshotRuntimeInfo::default(),
             }),
             enforce_ulimit_nofile: false,
             warp_slot: config.warp_slot,
