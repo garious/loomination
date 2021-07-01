@@ -3046,7 +3046,9 @@ impl Blockstore {
     }
 
     pub fn storage_size(&self) -> Result<u64> {
-        self.db.storage_size()
+        let db_size = self.db.storage_size()?;
+        let shreds_size = self.shred_storage_size()?;
+        Ok(db_size + shreds_size)
     }
 
     pub fn is_primary_access(&self) -> bool {

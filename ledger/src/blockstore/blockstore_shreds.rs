@@ -281,6 +281,10 @@ impl Blockstore {
         Ok(())
     }
 
+    pub(crate) fn shred_storage_size(&self) -> Result<u64> {
+        Ok(fs_extra::dir::get_size(&self.ledger_path.join(SHRED_DIRECTORY))?)
+    }
+
     fn slot_data_shreds_path(&self, slot: Slot) -> String {
         Path::new(&self.data_shred_path)
             .join(slot.to_string())
