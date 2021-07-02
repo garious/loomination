@@ -243,7 +243,10 @@ pub mod stable_log {
     /// Log a program invoke.
     ///
     /// The general form is:
-    ///     "Program <address> invoke [<depth>]"
+    ///
+    /// ```notrust
+    /// "Program <address> invoke [<depth>]"
+    /// ```
     pub fn program_invoke(
         logger: &Rc<RefCell<dyn Logger>>,
         program_id: &Pubkey,
@@ -255,7 +258,11 @@ pub mod stable_log {
     /// Log a message from the program itself.
     ///
     /// The general form is:
-    ///     "Program log: <program-generated output>"
+    ///
+    /// ```notrust
+    /// "Program log: <program-generated output>"
+    /// ```
+    ///
     /// That is, any program-generated output is guaranteed to be prefixed by "Program log: "
     pub fn program_log(logger: &Rc<RefCell<dyn Logger>>, message: &str) {
         ic_logger_msg!(logger, "Program log: {}", message);
@@ -264,7 +271,10 @@ pub mod stable_log {
     /// Log successful program execution.
     ///
     /// The general form is:
-    ///     "Program <address> success"
+    ///
+    /// ```notrust
+    /// "Program <address> success"
+    /// ```
     pub fn program_success(logger: &Rc<RefCell<dyn Logger>>, program_id: &Pubkey) {
         ic_logger_msg!(logger, "Program {} success", program_id);
     }
@@ -272,7 +282,10 @@ pub mod stable_log {
     /// Log program execution failure
     ///
     /// The general form is:
-    ///     "Program <address> failed: <program error details>"
+    ///
+    /// ```notrust
+    /// "Program <address> failed: <program error details>"
+    /// ```
     pub fn program_failure(
         logger: &Rc<RefCell<dyn Logger>>,
         program_id: &Pubkey,
