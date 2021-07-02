@@ -880,7 +880,7 @@ impl<T: Clone> Clone for COption<T> {
 }
 
 impl<T> Default for COption<T> {
-    /// Returns [`COption::None`][COption::COption::None].
+    /// Returns [`COption::None`][COption::None].
     ///
     /// # Examples
     ///
