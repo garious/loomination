@@ -139,6 +139,64 @@ impl VoteSubCommands for App<'_, '_> {
                 .arg(memo_arg())
         )
         .subcommand(
+            SubCommand::with_name("vote-authorize-voter-checked")
+                .about("Authorize a new vote signing keypair for the given vote account, \
+                    checking the new authority as a signer")
+                .arg(
+                    pubkey!(Arg::with_name("vote_account_pubkey")
+                        .index(1)
+                        .value_name("VOTE_ACCOUNT_ADDRESS")
+                        .required(true),
+                        "Vote account in which to set the authorized voter. "),
+                )
+                .arg(
+                    Arg::with_name("authorized")
+                        .index(2)
+                        .value_name("AUTHORIZED_KEYPAIR")
+                        .required(true)
+                        .validator(is_valid_signer)
+                        .help("Current authorized vote signer."),
+                )
+                .arg(
+                    Arg::with_name("new_authorized")
+                        .index(3)
+                        .value_name("NEW_AUTHORIZED_KEYPAIR")
+                        .required(true)
+                        .validator(is_valid_signer)
+                        .help("New authorized vote signer."),
+                )
+                .arg(memo_arg())
+        )
+        .subcommand(
+            SubCommand::with_name("vote-authorize-withdrawer-checked")
+                .about("Authorize a new withdraw signing keypair for the given vote account, \
+                    checking the new authority as a signer")
+                .arg(
+                    pubkey!(Arg::with_name("vote_account_pubkey")
+                        .index(1)
+                        .value_name("VOTE_ACCOUNT_ADDRESS")
+                        .required(true),
+                        "Vote account in which to set the authorized withdrawer. "),
+                )
+                .arg(
+                    Arg::with_name("authorized")
+                        .index(2)
+                        .value_name("AUTHORIZED_KEYPAIR")
+                        .required(true)
+                        .validator(is_valid_signer)
+                        .help("Current authorized withdrawer."),
+                )
+                .arg(
+                    Arg::with_name("new_authorized")
+                        .index(3)
+                        .value_name("NEW_AUTHORIZED_KEYPAIR")
+                        .required(true)
+                        .validator(is_valid_signer)
+                        .help("New authorized withdrawer."),
+                )
+                .arg(memo_arg())
+        )
+        .subcommand(
             SubCommand::with_name("vote-update-validator")
                 .about("Update the vote account's validator identity")
                 .arg(
@@ -311,19 +369,25 @@ pub fn parse_vote_authorize(
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
     vote_authorize: VoteAuthorize,
+    checked: bool,
 ) -> Result<CliCommandInfo, CliError> {
     let vote_account_pubkey =
         pubkey_of_signer(matches, "vote_account_pubkey", wallet_manager)?.unwrap();
-    let new_authorized_pubkey =
-        pubkey_of_signer(matches, "new_authorized_pubkey", wallet_manager)?.unwrap();
-    let (authorized, _) = signer_of(matches, "authorized", wallet_manager)?;
+    let (authorized, authorized_pubkey) = signer_of(matches, "authorized", wallet_manager)?;
 
     let payer_provided = None;
-    let signer_info = default_signer.generate_unique_signers(
-        vec![payer_provided, authorized],
-        matches,
-        wallet_manager,
-    )?;
+    let mut signers = vec![payer_provided, authorized];
+
+    let new_authorized_pubkey = if checked {
+        let (new_authorized_signer, new_authorized_pubkey) =
+            signer_of(matches, "new_authorized", wallet_manager)?;
+        signers.push(new_authorized_signer);
+        new_authorized_pubkey.unwrap()
+    } else {
+        pubkey_of_signer(matches, "new_authorized_pubkey", wallet_manager)?.unwrap()
+    };
+
+    let signer_info = default_signer.generate_unique_signers(signers, matches, wallet_manager)?;
     let memo = matches.value_of(MEMO_ARG.name).map(String::from);
 
     Ok(CliCommandInfo {
@@ -332,6 +396,12 @@ pub fn parse_vote_authorize(
             new_authorized_pubkey,
             vote_authorize,
             memo,
+            authorized: signer_info.index_of(authorized_pubkey).unwrap(),
+            new_authorized: if checked {
+                signer_info.index_of(Some(new_authorized_pubkey))
+            } else {
+                None
+            },
         },
         signers: signer_info.signers,
     })
@@ -558,28 +628,34 @@ pub fn process_vote_authorize(
     vote_account_pubkey: &Pubkey,
     new_authorized_pubkey: &Pubkey,
     vote_authorize: VoteAuthorize,
+    authorized: SignerIndex,
+    new_authorized: Option<SignerIndex>,
     memo: Option<&String>,
 ) -> ProcessResult {
-    // If the `authorized_account` is also the fee payer, `config.signers` will only have one
-    // keypair in it
-    let authorized = if config.signers.len() == 2 {
-        config.signers[1]
-    } else {
-        config.signers[0]
-    };
+    let authorized = config.signers[authorized];
+    let new_authorized_signer = new_authorized.map(|index| config.signers[index]);
 
     check_unique_pubkeys(
         (&authorized.pubkey(), "authorized_account".to_string()),
         (new_authorized_pubkey, "new_authorized_pubkey".to_string()),
     )?;
     let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
-    let ixs = vec![vote_instruction::authorize(
-        vote_account_pubkey,   // vote account to update
-        &authorized.pubkey(),  // current authorized
-        new_authorized_pubkey, // new vote signer/withdrawer
-        vote_authorize,        // vote or withdraw
-    )]
-    .with_memo(memo);
+    let vote_ix = if new_authorized_signer.is_some() {
+        vote_instruction::authorize_checked(
+            vote_account_pubkey,   // vote account to update
+            &authorized.pubkey(),  // current authorized
+            new_authorized_pubkey, // new vote signer/withdrawer
+            vote_authorize,        // vote or withdraw
+        )
+    } else {
+        vote_instruction::authorize(
+            vote_account_pubkey,   // vote account to update
+            &authorized.pubkey(),  // current authorized
+            new_authorized_pubkey, // new vote signer/withdrawer
+            vote_authorize,        // vote or withdraw
+        )
+    };
+    let ixs = vec![vote_ix].with_memo(memo);
 
     let message = Message::new(&ixs, Some(&config.signers[0].pubkey()));
     let mut tx = Transaction::new_unsigned(message);
@@ -843,6 +919,8 @@ mod tests {
                     new_authorized_pubkey: pubkey2,
                     vote_authorize: VoteAuthorize::Voter,
                     memo: None,
+                    authorized: 0,
+                    new_authorized: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
@@ -867,6 +945,8 @@ mod tests {
                     new_authorized_pubkey: pubkey2,
                     vote_authorize: VoteAuthorize::Voter,
                     memo: None,
+                    authorized: 1,
+                    new_authorized: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -874,6 +954,70 @@ mod tests {
                 ],
             }
         );
+
+        let (voter_keypair_file, mut tmp_file) = make_tmp_file();
+        let voter_keypair = Keypair::new();
+        write_keypair(&voter_keypair, tmp_file.as_file_mut()).unwrap();
+
+        let test_authorize_voter = test_commands.clone().get_matches_from(vec![
+            "test",
+            "vote-authorize-voter-checked",
+            &pubkey_string,
+            &default_keypair_file,
+            &voter_keypair_file,
+        ]);
+        assert_eq!(
+            parse_command(&test_authorize_voter, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::VoteAuthorize {
+                    vote_account_pubkey: pubkey,
+                    new_authorized_pubkey: voter_keypair.pubkey(),
+                    vote_authorize: VoteAuthorize::Voter,
+                    memo: None,
+                    authorized: 0,
+                    new_authorized: Some(1),
+                },
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    read_keypair_file(&voter_keypair_file).unwrap().into()
+                ],
+            }
+        );
+
+        let test_authorize_voter = test_commands.clone().get_matches_from(vec![
+            "test",
+            "vote-authorize-voter-checked",
+            &pubkey_string,
+            &authorized_keypair_file,
+            &voter_keypair_file,
+        ]);
+        assert_eq!(
+            parse_command(&test_authorize_voter, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::VoteAuthorize {
+                    vote_account_pubkey: pubkey,
+                    new_authorized_pubkey: voter_keypair.pubkey(),
+                    vote_authorize: VoteAuthorize::Voter,
+                    memo: None,
+                    authorized: 1,
+                    new_authorized: Some(2),
+                },
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    read_keypair_file(&authorized_keypair_file).unwrap().into(),
+                    read_keypair_file(&voter_keypair_file).unwrap().into(),
+                ],
+            }
+        );
+
+        let test_authorize_voter = test_commands.clone().get_matches_from(vec![
+            "test",
+            "vote-authorize-voter-checked",
+            &pubkey_string,
+            &authorized_keypair_file,
+            &pubkey2_string,
+        ]);
+        assert!(parse_command(&test_authorize_voter, &default_signer, &mut None).is_err());
 
         let (keypair_file, mut tmp_file) = make_tmp_file();
         let keypair = Keypair::new();

@@ -342,6 +342,8 @@ pub enum CliCommand {
         new_authorized_pubkey: Pubkey,
         vote_authorize: VoteAuthorize,
         memo: Option<String>,
+        authorized: SignerIndex,
+        new_authorized: Option<SignerIndex>,
     },
     VoteUpdateValidator {
         vote_account_pubkey: Pubkey,
@@ -766,12 +768,28 @@ pub fn parse_command(
             default_signer,
             wallet_manager,
             VoteAuthorize::Voter,
+            false,
         ),
         ("vote-authorize-withdrawer", Some(matches)) => parse_vote_authorize(
             matches,
             default_signer,
             wallet_manager,
             VoteAuthorize::Withdrawer,
+            false,
+        ),
+        ("vote-authorize-voter-checked", Some(matches)) => parse_vote_authorize(
+            matches,
+            default_signer,
+            wallet_manager,
+            VoteAuthorize::Voter,
+            true,
+        ),
+        ("vote-authorize-withdrawer-checked", Some(matches)) => parse_vote_authorize(
+            matches,
+            default_signer,
+            wallet_manager,
+            VoteAuthorize::Withdrawer,
+            true,
         ),
         ("vote-account", Some(matches)) => parse_vote_get_account_command(matches, wallet_manager),
         ("withdraw-from-vote-account", Some(matches)) => {
@@ -1833,12 +1851,16 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             new_authorized_pubkey,
             vote_authorize,
             memo,
+            authorized,
+            new_authorized,
         } => process_vote_authorize(
             &rpc_client,
             config,
             vote_account_pubkey,
             new_authorized_pubkey,
             *vote_authorize,
+            *authorized,
+            *new_authorized,
             memo.as_ref(),
         ),
         CliCommand::VoteUpdateValidator {
@@ -2657,6 +2679,8 @@ mod tests {
             new_authorized_pubkey,
             vote_authorize: VoteAuthorize::Voter,
             memo: None,
+            authorized: 0,
+            new_authorized: None,
         };
         let result = process_command(&config);
         assert!(result.is_ok());
@@ -2852,6 +2876,8 @@ mod tests {
             new_authorized_pubkey: bob_pubkey,
             vote_authorize: VoteAuthorize::Voter,
             memo: None,
+            authorized: 0,
+            new_authorized: None,
         };
         assert!(process_command(&config).is_err());
 
