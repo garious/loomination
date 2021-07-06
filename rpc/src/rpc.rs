@@ -1984,26 +1984,41 @@ fn get_encoded_account(
     encoding: UiAccountEncoding,
     data_slice: Option<UiDataSliceConfig>,
 ) -> Result<Option<UiAccount>> {
-    let mut response = None;
-    if let Some(account) = bank.get_account(pubkey) {
-        if account.owner() == &spl_token_id_v2_0() && encoding == UiAccountEncoding::JsonParsed {
-            response = Some(get_parsed_token_account(bank.clone(), pubkey, account));
-        } else if (encoding == UiAccountEncoding::Binary || encoding == UiAccountEncoding::Base58)
-            && account.data().len() > 128
-        {
-            let message = "Encoded binary (base 58) data should be less than 128 bytes, please use Base64 encoding.".to_string();
-            return Err(error::Error {
-                code: error::ErrorCode::InvalidRequest,
-                message,
-                data: None,
-            });
-        } else {
-            response = Some(UiAccount::encode(
-                pubkey, &account, encoding, None, data_slice,
-            ));
+    match bank.get_account(pubkey) {
+        Some(account) => {
+            let response = if account.owner() == &spl_token_id_v2_0()
+                && encoding == UiAccountEncoding::JsonParsed
+            {
+                get_parsed_token_account(bank.clone(), pubkey, account)
+            } else {
+                encode_account(&account, pubkey, encoding, data_slice)?
+            };
+            Ok(Some(response))
         }
+        None => Ok(None),
     }
-    Ok(response)
+}
+
+fn encode_account<T: ReadableAccount>(
+    account: &T,
+    pubkey: &Pubkey,
+    encoding: UiAccountEncoding,
+    data_slice: Option<UiDataSliceConfig>,
+) -> Result<UiAccount> {
+    if (encoding == UiAccountEncoding::Binary || encoding == UiAccountEncoding::Base58)
+        && account.data().len() > 128
+    {
+        let message = "Encoded binary (base 58) data should be less than 128 bytes, please use Base64 encoding.".to_string();
+        Err(error::Error {
+            code: error::ErrorCode::InvalidRequest,
+            message,
+            data: None,
+        })
+    } else {
+        Ok(UiAccount::encode(
+            pubkey, account, encoding, None, data_slice,
+        ))
+    }
 }
 
 fn get_spl_token_owner_filter(program_id: &Pubkey, filters: &[RpcFilterType]) -> Option<Pubkey> {
