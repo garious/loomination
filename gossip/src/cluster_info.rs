@@ -29,7 +29,7 @@ use {
         gossip_error::GossipError,
         ping_pong::{self, PingCache, Pong},
         socketaddr, socketaddr_any,
-        weighted_shuffle::{weighted_shuffle, WeightedShuffle},
+        weighted_shuffle::WeightedShuffle,
     },
     bincode::{serialize, serialized_size},
     itertools::Itertools,
