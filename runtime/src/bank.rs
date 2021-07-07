@@ -38,7 +38,7 @@ use crate::{
         AccountAddressFilter, Accounts, TransactionAccounts, TransactionLoadResult,
         TransactionLoaders,
     },
-    accounts_db::{AccountShrinkThreshold, ErrorCounters, SnapshotStorages},
+    accounts_db::{AccountShrinkThreshold, ErrorCounters, SnapshotStorage, SnapshotStorages},
     accounts_index::{AccountSecondaryIndexes, IndexKey, ScanResult},
     ancestors::{Ancestors, AncestorsForSerialization},
     blockhash_queue::BlockhashQueue,
@@ -4632,6 +4632,21 @@ impl Bank {
 
     pub fn get_snapshot_storages(&self) -> SnapshotStorages {
         self.rc.get_snapshot_storages(self.slot())
+    }
+
+    /// Get the snapshot storages _higher than_ the `full_snapshot_slot`.  This is used when making an
+    /// incremental snapshot.
+    pub fn get_incremental_snapshot_storages(&self, full_snapshot_slot: Slot) -> SnapshotStorages {
+        self.get_snapshot_storages()
+            .into_iter()
+            .map(|storage| {
+                storage
+                    .into_iter()
+                    .filter(|entry| entry.slot() > full_snapshot_slot)
+                    .collect::<SnapshotStorage>()
+            })
+            .filter(|storage| !storage.is_empty())
+            .collect()
     }
 
     #[must_use]

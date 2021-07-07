@@ -66,8 +66,13 @@ where
     R: Read,
 {
     // read and deserialise the accounts database directly from the stream
+    let accounts_db_fields = C::deserialize_accounts_db_fields(stream)?;
+    let snapshot_accounts_db_fields = SnapshotAccountsDbFields {
+        full_snapshot_accounts_db_fields: accounts_db_fields,
+        incremental_snapshot_accounts_db_fields: None,
+    };
     reconstruct_accountsdb_from_fields(
-        C::deserialize_accounts_db_fields(stream)?,
+        snapshot_accounts_db_fields,
         account_paths,
         unpacked_append_vec_map,
         &ClusterType::Development,
@@ -218,9 +223,13 @@ fn test_bank_serialize_style(serde_style: SerdeStyle) {
     let copied_accounts = TempDir::new().unwrap();
     let unpacked_append_vec_map =
         copy_append_vecs(&bank2.rc.accounts.accounts_db, copied_accounts.path()).unwrap();
-    let mut dbank = crate::serde_snapshot::bank_from_stream(
+    let mut snapshot_streams = SnapshotStreams {
+        full_snapshot_stream: &mut reader,
+        incremental_snapshot_stream: None,
+    };
+    let mut dbank = crate::serde_snapshot::bank_from_streams(
         serde_style,
-        &mut reader,
+        &mut snapshot_streams,
         &dbank_paths,
         unpacked_append_vec_map,
         &genesis_config,

@@ -74,6 +74,21 @@ struct AccountsDbFields<T>(
     BankHashInfo,
 );
 
+/// Helper type to wrap BufReader streams when deserializing and reconstructing from either just a
+/// full snapshot, or both a full and incremental snapshot
+pub struct SnapshotStreams<'a, R> {
+    pub full_snapshot_stream: &'a mut BufReader<R>,
+    pub incremental_snapshot_stream: Option<&'a mut BufReader<R>>,
+}
+
+/// Helper type to wrap AccountsDbFields when reconstructing AccountsDb from either just a full
+/// snapshot, or both a full and incremental snapshot
+#[derive(Debug)]
+struct SnapshotAccountsDbFields<E> {
+    full_snapshot_accounts_db_fields: AccountsDbFields<E>,
+    incremental_snapshot_accounts_db_fields: Option<AccountsDbFields<E>>,
+}
+
 trait TypeContext<'a> {
     type SerializableAccountStorageEntry: Serialize
         + DeserializeOwned
@@ -127,16 +142,16 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn bank_from_stream<R>(
+pub(crate) fn bank_from_streams<R>(
     serde_style: SerdeStyle,
-    stream: &mut BufReader<R>,
+    snapshot_streams: &mut SnapshotStreams<R>,
     account_paths: &[PathBuf],
     unpacked_append_vec_map: UnpackedAppendVecMap,
     genesis_config: &GenesisConfig,
     frozen_account_pubkeys: &[Pubkey],
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&Builtins>,
-    account_indexes: AccountSecondaryIndexes,
+    account_secondary_indexes: AccountSecondaryIndexes,
     caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
@@ -146,18 +161,33 @@ where
 {
     macro_rules! INTO {
         ($x:ident) => {{
-            let (bank_fields, accounts_db_fields) = $x::deserialize_bank_fields(stream)?;
+            let (full_snapshot_bank_fields, full_snapshot_accounts_db_fields) =
+                $x::deserialize_bank_fields(snapshot_streams.full_snapshot_stream)?;
+            let (incremental_snapshot_bank_fields, incremental_snapshot_accounts_db_fields) =
+                if let Some(ref mut incremental_snapshot_stream) =
+                    snapshot_streams.incremental_snapshot_stream
+                {
+                    let (bank_fields, accounts_db_fields) =
+                        $x::deserialize_bank_fields(incremental_snapshot_stream)?;
+                    (Some(bank_fields), Some(accounts_db_fields))
+                } else {
+                    (None, None)
+                };
 
+            let snapshot_accounts_db_fields = SnapshotAccountsDbFields {
+                full_snapshot_accounts_db_fields,
+                incremental_snapshot_accounts_db_fields,
+            };
             let bank = reconstruct_bank_from_fields(
-                bank_fields,
-                accounts_db_fields,
+                incremental_snapshot_bank_fields.unwrap_or(full_snapshot_bank_fields),
+                snapshot_accounts_db_fields,
                 genesis_config,
                 frozen_account_pubkeys,
                 account_paths,
                 unpacked_append_vec_map,
                 debug_keys,
                 additional_builtins,
-                account_indexes,
+                account_secondary_indexes,
                 caching_enabled,
                 limit_load_slot_count_from_snapshot,
                 shrink_ratio,
@@ -241,14 +271,14 @@ impl<'a, C> IgnoreAsHelper for SerializableAccountsDb<'a, C> {}
 #[allow(clippy::too_many_arguments)]
 fn reconstruct_bank_from_fields<E>(
     bank_fields: BankFieldsToDeserialize,
-    accounts_db_fields: AccountsDbFields<E>,
+    snapshot_accounts_db_fields: SnapshotAccountsDbFields<E>,
     genesis_config: &GenesisConfig,
     frozen_account_pubkeys: &[Pubkey],
     account_paths: &[PathBuf],
     unpacked_append_vec_map: UnpackedAppendVecMap,
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&Builtins>,
-    account_indexes: AccountSecondaryIndexes,
+    account_secondary_indexes: AccountSecondaryIndexes,
     caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
@@ -257,11 +287,11 @@ where
     E: SerializableStorage + std::marker::Sync,
 {
     let mut accounts_db = reconstruct_accountsdb_from_fields(
-        accounts_db_fields,
+        snapshot_accounts_db_fields,
         account_paths,
         unpacked_append_vec_map,
         &genesis_config.cluster_type,
-        account_indexes,
+        account_secondary_indexes,
         caching_enabled,
         limit_load_slot_count_from_snapshot,
         shrink_ratio,
@@ -306,11 +336,11 @@ where
 }
 
 fn reconstruct_accountsdb_from_fields<E>(
-    accounts_db_fields: AccountsDbFields<E>,
+    snapshot_accounts_db_fields: SnapshotAccountsDbFields<E>,
     account_paths: &[PathBuf],
     unpacked_append_vec_map: UnpackedAppendVecMap,
     cluster_type: &ClusterType,
-    account_indexes: AccountSecondaryIndexes,
+    account_secondary_indexes: AccountSecondaryIndexes,
     caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
@@ -321,11 +351,53 @@ where
     let mut accounts_db = AccountsDb::new_with_config(
         account_paths.to_vec(),
         cluster_type,
-        account_indexes,
+        account_secondary_indexes,
         caching_enabled,
         shrink_ratio,
     );
-    let AccountsDbFields(storage, version, slot, bank_hash_info) = accounts_db_fields;
+    let AccountsDbFields(
+        full_snapshot_storage,
+        full_snapshot_version,
+        full_snapshot_slot,
+        full_snapshot_bank_hash_info,
+    ) = snapshot_accounts_db_fields.full_snapshot_accounts_db_fields;
+
+    let (snapshot_version, snapshot_slot, snapshot_bank_hash_info) = snapshot_accounts_db_fields
+        .incremental_snapshot_accounts_db_fields
+        .as_ref()
+        .map(
+            |AccountsDbFields(
+                _,
+                incremental_snapshot_version,
+                incremental_snapshot_slot,
+                incremental_snapshot_bank_hash_info,
+            )| {
+                (
+                    *incremental_snapshot_version,
+                    *incremental_snapshot_slot,
+                    incremental_snapshot_bank_hash_info.clone(),
+                )
+            },
+        )
+        .unwrap_or((
+            full_snapshot_version,
+            full_snapshot_slot,
+            full_snapshot_bank_hash_info,
+        ));
+
+    // filter out incremental snapshot storages with slot <= full snapshot slot
+    let incremental_snapshot_storage = snapshot_accounts_db_fields
+        .incremental_snapshot_accounts_db_fields
+        .map_or_else(HashMap::new, |fields| {
+            fields
+                .0
+                .into_iter()
+                .filter(|(slot, _)| *slot > full_snapshot_slot)
+                .collect::<HashMap<_, _>>()
+        });
+
+    assert!(incremental_snapshot_storage.iter().all(|storage_entry| !full_snapshot_storage.contains_key(storage_entry.0)),
+    "There must not be any overlap in the slots of storages between the full snapshot and the incremental snapshot");
 
     // Ensure all account paths exist
     for path in &accounts_db.paths {
@@ -333,7 +405,10 @@ where
             .unwrap_or_else(|err| panic!("Failed to create directory {}: {}", path.display(), err));
     }
 
-    let storage = storage.into_iter().collect::<Vec<_>>();
+    let storage = full_snapshot_storage
+        .into_iter()
+        .chain(incremental_snapshot_storage.into_iter())
+        .collect::<Vec<_>>();
 
     // Remap the deserialized AppendVec paths to point to correct local paths
     let mut storage = (0..storage.len())
@@ -371,7 +446,7 @@ where
         .bank_hashes
         .write()
         .unwrap()
-        .insert(slot, bank_hash_info);
+        .insert(snapshot_slot, snapshot_bank_hash_info);
 
     // Process deserialized data, set necessary fields in self
     let max_id: usize = *storage
@@ -395,7 +470,7 @@ where
     accounts_db.next_id.store(max_id + 1, Ordering::Relaxed);
     accounts_db
         .write_version
-        .fetch_add(version, Ordering::Relaxed);
+        .fetch_add(snapshot_version, Ordering::Relaxed);
     accounts_db.generate_index(limit_load_slot_count_from_snapshot);
     Ok(accounts_db)
 }
