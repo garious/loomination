@@ -64,6 +64,7 @@ use thiserror::Error;
 
 pub const DEFAULT_RPC_TIMEOUT_SECONDS: &str = "30";
 pub const DEFAULT_CONFIRM_TX_TIMEOUT_SECONDS: &str = "5";
+const CHECKED: bool = true;
 
 #[derive(Debug, PartialEq)]
 #[allow(clippy::large_enum_variant)]
@@ -768,28 +769,28 @@ pub fn parse_command(
             default_signer,
             wallet_manager,
             VoteAuthorize::Voter,
-            false,
+            !CHECKED,
         ),
         ("vote-authorize-withdrawer", Some(matches)) => parse_vote_authorize(
             matches,
             default_signer,
             wallet_manager,
             VoteAuthorize::Withdrawer,
-            false,
+            !CHECKED,
         ),
         ("vote-authorize-voter-checked", Some(matches)) => parse_vote_authorize(
             matches,
             default_signer,
             wallet_manager,
             VoteAuthorize::Voter,
-            true,
+            CHECKED,
         ),
         ("vote-authorize-withdrawer-checked", Some(matches)) => parse_vote_authorize(
             matches,
             default_signer,
             wallet_manager,
             VoteAuthorize::Withdrawer,
-            true,
+            CHECKED,
         ),
         ("vote-account", Some(matches)) => parse_vote_get_account_command(matches, wallet_manager),
         ("withdraw-from-vote-account", Some(matches)) => {
