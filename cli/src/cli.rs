@@ -287,6 +287,7 @@ pub enum CliCommand {
         stake_account_pubkey: Pubkey,
         lockup: LockupArgs,
         custodian: SignerIndex,
+        new_custodian_signer: Option<SignerIndex>,
         sign_only: bool,
         dump_transaction_message: bool,
         blockhash_query: BlockhashQuery,
@@ -746,7 +747,10 @@ pub fn parse_command(
             parse_stake_authorize(matches, default_signer, wallet_manager)
         }
         ("stake-set-lockup", Some(matches)) => {
-            parse_stake_set_lockup(matches, default_signer, wallet_manager)
+            parse_stake_set_lockup(matches, default_signer, wallet_manager, !CHECKED)
+        }
+        ("stake-set-lockup-checked", Some(matches)) => {
+            parse_stake_set_lockup(matches, default_signer, wallet_manager, CHECKED)
         }
         ("stake-account", Some(matches)) => parse_show_stake_account(matches, wallet_manager),
         ("stake-history", Some(matches)) => parse_show_stake_history(matches),
@@ -1733,6 +1737,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             stake_account_pubkey,
             mut lockup,
             custodian,
+            new_custodian_signer,
             sign_only,
             dump_transaction_message,
             blockhash_query,
@@ -1745,6 +1750,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             config,
             stake_account_pubkey,
             &mut lockup,
+            *new_custodian_signer,
             *custodian,
             *sign_only,
             *dump_transaction_message,

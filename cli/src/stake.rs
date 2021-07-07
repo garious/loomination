@@ -487,6 +487,56 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(memo_arg())
         )
         .subcommand(
+            SubCommand::with_name("stake-set-lockup-checked")
+                .about("Set Lockup for the stake account, checking the new authority as a signer")
+                .arg(
+                    pubkey!(Arg::with_name("stake_account_pubkey")
+                        .index(1)
+                        .value_name("STAKE_ACCOUNT_ADDRESS")
+                        .required(true),
+                        "Stake account for which to set lockup parameters. ")
+                )
+                .arg(
+                    Arg::with_name("lockup_epoch")
+                        .long("lockup-epoch")
+                        .value_name("NUMBER")
+                        .takes_value(true)
+                        .help("The epoch height at which this account will be available for withdrawal")
+                )
+                .arg(
+                    Arg::with_name("lockup_date")
+                        .long("lockup-date")
+                        .value_name("RFC3339 DATETIME")
+                        .validator(is_rfc3339_datetime)
+                        .takes_value(true)
+                        .help("The date and time at which this account will be available for withdrawal")
+                )
+                .arg(
+                    Arg::with_name("new_custodian")
+                        .long("new-custodian")
+                        .value_name("KEYPAIR")
+                        .takes_value(true)
+                        .validator(is_valid_signer)
+                        .help("Keypair of a new lockup custodian")
+                )
+                .group(ArgGroup::with_name("lockup_details")
+                    .args(&["lockup_epoch", "lockup_date", "new_custodian"])
+                    .multiple(true)
+                    .required(true))
+                .arg(
+                    Arg::with_name("custodian")
+                        .long("custodian")
+                        .takes_value(true)
+                        .value_name("KEYPAIR")
+                        .validator(is_valid_signer)
+                        .help("Keypair of the existing custodian [default: cli config pubkey]")
+                )
+                .offline_args()
+                .nonce_args(false)
+                .arg(fee_payer_arg())
+                .arg(memo_arg())
+        )
+        .subcommand(
             SubCommand::with_name("stake-account")
                 .about("Show the contents of a stake account")
                 .alias("show-stake-account")
@@ -955,12 +1005,21 @@ pub fn parse_stake_set_lockup(
     matches: &ArgMatches<'_>,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    checked: bool,
 ) -> Result<CliCommandInfo, CliError> {
     let stake_account_pubkey =
         pubkey_of_signer(matches, "stake_account_pubkey", wallet_manager)?.unwrap();
     let epoch = value_of(matches, "lockup_epoch");
     let unix_timestamp = unix_timestamp_from_rfc3339_datetime(matches, "lockup_date");
-    let new_custodian = pubkey_of_signer(matches, "new_custodian", wallet_manager)?;
+
+    let (new_custodian_signer, new_custodian) = if checked {
+        signer_of(matches, "new_custodian", wallet_manager)?
+    } else {
+        (
+            None,
+            pubkey_of_signer(matches, "new_custodian", wallet_manager)?,
+        )
+    };
 
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
     let dump_transaction_message = matches.is_present(DUMP_TRANSACTION_MESSAGE.name);
@@ -977,6 +1036,9 @@ pub fn parse_stake_set_lockup(
     if nonce_account.is_some() {
         bulk_signers.push(nonce_authority);
     }
+    if new_custodian_signer.is_some() {
+        bulk_signers.push(new_custodian_signer);
+    }
     let signer_info =
         default_signer.generate_unique_signers(bulk_signers, matches, wallet_manager)?;
 
@@ -987,6 +1049,11 @@ pub fn parse_stake_set_lockup(
                 custodian: new_custodian,
                 epoch,
                 unix_timestamp,
+            },
+            new_custodian_signer: if checked {
+                signer_info.index_of(new_custodian)
+            } else {
+                None
             },
             custodian: signer_info.index_of(custodian_pubkey).unwrap(),
             sign_only,
@@ -1712,6 +1779,7 @@ pub fn process_stake_set_lockup(
     config: &CliConfig,
     stake_account_pubkey: &Pubkey,
     lockup: &mut LockupArgs,
+    new_custodian_signer: Option<SignerIndex>,
     custodian: SignerIndex,
     sign_only: bool,
     dump_transaction_message: bool,
@@ -1725,11 +1793,11 @@ pub fn process_stake_set_lockup(
         blockhash_query.get_blockhash_and_fee_calculator(rpc_client, config.commitment)?;
     let custodian = config.signers[custodian];
 
-    let ixs = vec![stake_instruction::set_lockup(
-        stake_account_pubkey,
-        lockup,
-        &custodian.pubkey(),
-    )]
+    let ixs = vec![if new_custodian_signer.is_some() {
+        stake_instruction::set_lockup_checked(stake_account_pubkey, lockup, &custodian.pubkey())
+    } else {
+        stake_instruction::set_lockup(stake_account_pubkey, lockup, &custodian.pubkey())
+    }]
     .with_memo(memo);
     let nonce_authority = config.signers[nonce_authority];
     let fee_payer = config.signers[fee_payer];

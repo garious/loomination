@@ -1172,6 +1172,7 @@ fn test_stake_set_lockup() {
     config.command = CliCommand::StakeSetLockup {
         stake_account_pubkey,
         lockup,
+        new_custodian_signer: None,
         custodian: 0,
         sign_only: false,
         dump_transaction_message: false,
@@ -1207,6 +1208,7 @@ fn test_stake_set_lockup() {
     config.command = CliCommand::StakeSetLockup {
         stake_account_pubkey,
         lockup,
+        new_custodian_signer: None,
         custodian: 0,
         sign_only: false,
         dump_transaction_message: false,
@@ -1227,6 +1229,7 @@ fn test_stake_set_lockup() {
     config.command = CliCommand::StakeSetLockup {
         stake_account_pubkey,
         lockup,
+        new_custodian_signer: None,
         custodian: 1,
         sign_only: false,
         dump_transaction_message: false,
@@ -1259,6 +1262,7 @@ fn test_stake_set_lockup() {
     config.command = CliCommand::StakeSetLockup {
         stake_account_pubkey,
         lockup,
+        new_custodian_signer: None,
         custodian: 1,
         sign_only: false,
         dump_transaction_message: false,
@@ -1306,6 +1310,7 @@ fn test_stake_set_lockup() {
     config_offline.command = CliCommand::StakeSetLockup {
         stake_account_pubkey,
         lockup,
+        new_custodian_signer: None,
         custodian: 0,
         sign_only: true,
         dump_transaction_message: false,
@@ -1324,6 +1329,7 @@ fn test_stake_set_lockup() {
     config.command = CliCommand::StakeSetLockup {
         stake_account_pubkey,
         lockup,
+        new_custodian_signer: None,
         custodian: 0,
         sign_only: false,
         dump_transaction_message: false,
@@ -1619,6 +1625,7 @@ fn test_stake_checked_instructions() {
         from: 0,
     };
     process_command(&config).unwrap_err(); // unsigned authority should fail
+
     config.signers = vec![&default_signer, &stake_keypair, &withdrawer_keypair];
     config.command = CliCommand::CreateStakeAccount {
         stake_account: 1,
@@ -1638,4 +1645,57 @@ fn test_stake_checked_instructions() {
         from: 0,
     };
     process_command(&config).unwrap();
+
+    // Set lockup, checking new custodian
+    let custodian = Keypair::new();
+    let custodian_pubkey = custodian.pubkey();
+    let lockup = LockupArgs {
+        unix_timestamp: Some(1_581_534_570),
+        epoch: Some(200),
+        custodian: Some(custodian_pubkey),
+    };
+    config.signers = vec![&default_signer, &withdrawer_keypair];
+    config.command = CliCommand::StakeSetLockup {
+        stake_account_pubkey,
+        lockup,
+        new_custodian_signer: Some(1),
+        custodian: 1,
+        sign_only: false,
+        dump_transaction_message: false,
+        blockhash_query: BlockhashQuery::default(),
+        nonce_account: None,
+        nonce_authority: 0,
+        memo: None,
+        fee_payer: 0,
+    };
+    process_command(&config).unwrap_err(); // unsigned new custodian should fail
+
+    config.signers = vec![&default_signer, &withdrawer_keypair, &custodian];
+    config.command = CliCommand::StakeSetLockup {
+        stake_account_pubkey,
+        lockup,
+        new_custodian_signer: Some(2),
+        custodian: 1,
+        sign_only: false,
+        dump_transaction_message: false,
+        blockhash_query: BlockhashQuery::default(),
+        nonce_account: None,
+        nonce_authority: 0,
+        memo: None,
+        fee_payer: 0,
+    };
+    process_command(&config).unwrap();
+    let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
+    let stake_state: StakeState = stake_account.state().unwrap();
+    println!("{:?}", stake_state);
+    let current_lockup = match stake_state {
+        StakeState::Initialized(meta) => meta.lockup,
+        _ => panic!("Unexpected stake state!"),
+    };
+    assert_eq!(
+        current_lockup.unix_timestamp,
+        lockup.unix_timestamp.unwrap()
+    );
+    assert_eq!(current_lockup.epoch, lockup.epoch.unwrap());
+    assert_eq!(current_lockup.custodian, custodian_pubkey);
 }
