@@ -5956,9 +5956,9 @@ impl AccountsDb {
                             // do this here
                             for account in accounts_map.into_iter() {
                                 let (key, account_info) = account;
-                                let lock = self.accounts_index.get_account_maps_read_lock(key);
-                                let x = lock.get(key).unwrap();
-                                let sl = x.slot_list.read().unwrap();
+                                let lock = self.accounts_index.get_account_maps_read_lock(&key);
+                                let x = lock.get(&key).unwrap();
+                                let sl = &x.slot_list;
                                 let mut count = 0;
                                 for (slot2, account_info2) in sl.iter() {
                                     if slot2 == slot {
@@ -6017,18 +6017,13 @@ impl AccountsDb {
         let mut stored_sizes_and_counts = HashMap::new();
         self.accounts_index.account_maps.iter().for_each(|i| {
             i.read().unwrap().values().for_each(|entry| {
-                entry
-                    .slot_list
-                    .read()
-                    .unwrap()
-                    .iter()
-                    .for_each(|(_slot, account_entry)| {
-                        let storage_entry_meta = stored_sizes_and_counts
-                            .entry(account_entry.store_id)
-                            .or_insert((0, 0));
-                        storage_entry_meta.0 += account_entry.stored_size;
-                        storage_entry_meta.1 += 1;
-                    })
+                entry.slot_list.iter().for_each(|(_slot, account_entry)| {
+                    let storage_entry_meta = stored_sizes_and_counts
+                        .entry(account_entry.store_id)
+                        .or_insert((0, 0));
+                    storage_entry_meta.0 += account_entry.stored_size;
+                    storage_entry_meta.1 += 1;
+                })
             })
         });
         for slot_stores in self.storage.0.iter() {
@@ -6074,10 +6069,7 @@ impl AccountsDb {
         self.accounts_index.account_maps.iter().for_each(|i| {
             for (pubkey, account_entry) in i.read().unwrap().iter() {
                 info!("  key: {} ref_count: {}", pubkey, account_entry.ref_count(),);
-                info!(
-                    "      slots: {:?}",
-                    *account_entry.slot_list.read().unwrap()
-                );
+                info!("      slots: {:?}", account_entry.slot_list);
             }
         });
     }
