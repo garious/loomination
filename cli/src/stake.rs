@@ -182,6 +182,64 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(memo_arg())
         )
         .subcommand(
+            SubCommand::with_name("create-stake-account-checked")
+                .about("Create a stake account, checking the withdraw authority as a signer")
+                .arg(
+                    Arg::with_name("stake_account")
+                        .index(1)
+                        .value_name("STAKE_ACCOUNT_KEYPAIR")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_valid_signer)
+                        .help("Stake account to create (or base of derived address if --seed is used)")
+                )
+                .arg(
+                    Arg::with_name("amount")
+                        .index(2)
+                        .value_name("AMOUNT")
+                        .takes_value(true)
+                        .validator(is_amount_or_all)
+                        .required(true)
+                        .help("The amount to send to the stake account, in SOL; accepts keyword ALL")
+                )
+                .arg(
+                    Arg::with_name("seed")
+                        .long("seed")
+                        .value_name("STRING")
+                        .takes_value(true)
+                        .help("Seed for address generation; if specified, the resulting account \
+                               will be at a derived address of the STAKE_ACCOUNT_KEYPAIR pubkey")
+                )
+                .arg(
+                    Arg::with_name(STAKE_AUTHORITY_ARG.name)
+                        .long(STAKE_AUTHORITY_ARG.long)
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .validator(is_valid_pubkey)
+                        .help(STAKE_AUTHORITY_ARG.help)
+                )
+                .arg(
+                    Arg::with_name(WITHDRAW_AUTHORITY_ARG.name)
+                        .long(WITHDRAW_AUTHORITY_ARG.long)
+                        .value_name("KEYPAIR")
+                        .takes_value(true)
+                        .validator(is_valid_signer)
+                        .help(WITHDRAW_AUTHORITY_ARG.help)
+                )
+                .arg(
+                    Arg::with_name("from")
+                        .long("from")
+                        .takes_value(true)
+                        .value_name("KEYPAIR")
+                        .validator(is_valid_signer)
+                        .help("Source account of funds [default: cli config keypair]"),
+                )
+                .offline_args()
+                .nonce_args(false)
+                .arg(fee_payer_arg())
+                .arg(memo_arg())
+        )
+        .subcommand(
             SubCommand::with_name("delegate-stake")
                 .about("Delegate stake to a vote account")
                 .arg(
@@ -493,13 +551,23 @@ pub fn parse_create_stake_account(
     matches: &ArgMatches<'_>,
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    checked: bool,
 ) -> Result<CliCommandInfo, CliError> {
     let seed = matches.value_of("seed").map(|s| s.to_string());
     let epoch = value_of(matches, "lockup_epoch").unwrap_or(0);
     let unix_timestamp = unix_timestamp_from_rfc3339_datetime(matches, "lockup_date").unwrap_or(0);
     let custodian = pubkey_of_signer(matches, "custodian", wallet_manager)?.unwrap_or_default();
     let staker = pubkey_of_signer(matches, STAKE_AUTHORITY_ARG.name, wallet_manager)?;
-    let withdrawer = pubkey_of_signer(matches, WITHDRAW_AUTHORITY_ARG.name, wallet_manager)?;
+
+    let (withdrawer_signer, withdrawer) = if checked {
+        signer_of(matches, WITHDRAW_AUTHORITY_ARG.name, wallet_manager)?
+    } else {
+        (
+            None,
+            pubkey_of_signer(matches, WITHDRAW_AUTHORITY_ARG.name, wallet_manager)?,
+        )
+    };
+
     let amount = SpendAmount::new_from_matches(matches, "amount");
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
     let dump_transaction_message = matches.is_present(DUMP_TRANSACTION_MESSAGE.name);
@@ -517,6 +585,9 @@ pub fn parse_create_stake_account(
     if nonce_account.is_some() {
         bulk_signers.push(nonce_authority);
     }
+    if withdrawer_signer.is_some() {
+        bulk_signers.push(withdrawer_signer);
+    }
     let signer_info =
         default_signer.generate_unique_signers(bulk_signers, matches, wallet_manager)?;
 
@@ -526,6 +597,11 @@ pub fn parse_create_stake_account(
             seed,
             staker,
             withdrawer,
+            withdrawer_signer: if checked {
+                signer_info.index_of(withdrawer)
+            } else {
+                None
+            },
             lockup: Lockup {
                 unix_timestamp,
                 epoch,
@@ -967,6 +1043,7 @@ pub fn process_create_stake_account(
     seed: &Option<String>,
     staker: &Option<Pubkey>,
     withdrawer: &Option<Pubkey>,
+    withdrawer_signer: Option<SignerIndex>,
     lockup: &Lockup,
     amount: SpendAmount,
     sign_only: bool,
@@ -999,8 +1076,18 @@ pub fn process_create_stake_account(
             withdrawer: withdrawer.unwrap_or(from.pubkey()),
         };
 
-        let ixs = if let Some(seed) = seed {
-            stake_instruction::create_account_with_seed(
+        let ixs = match (seed, withdrawer_signer) {
+            (Some(seed), Some(_withdrawer_signer)) => {
+                stake_instruction::create_account_with_seed_checked(
+                    &from.pubkey(),          // from
+                    &stake_account_address,  // to
+                    &stake_account.pubkey(), // base
+                    seed,                    // seed
+                    &authorized,
+                    lamports,
+                )
+            }
+            (Some(seed), None) => stake_instruction::create_account_with_seed(
                 &from.pubkey(),          // from
                 &stake_account_address,  // to
                 &stake_account.pubkey(), // base
@@ -1008,18 +1095,22 @@ pub fn process_create_stake_account(
                 &authorized,
                 lockup,
                 lamports,
-            )
-            .with_memo(memo)
-        } else {
-            stake_instruction::create_account(
+            ),
+            (None, Some(_withdrawer_signer)) => stake_instruction::create_account_checked(
+                &from.pubkey(),
+                &stake_account.pubkey(),
+                &authorized,
+                lamports,
+            ),
+            (None, None) => stake_instruction::create_account(
                 &from.pubkey(),
                 &stake_account.pubkey(),
                 &authorized,
                 lockup,
                 lamports,
-            )
-            .with_memo(memo)
-        };
+            ),
+        }
+        .with_memo(memo);
         if let Some(nonce_account) = &nonce_account {
             Message::new_with_nonce(
                 ixs,
@@ -2754,6 +2845,7 @@ mod tests {
                     seed: None,
                     staker: Some(authorized),
                     withdrawer: Some(authorized),
+                    withdrawer_signer: None,
                     lockup: Lockup {
                         epoch: 43,
                         unix_timestamp: 0,
@@ -2797,6 +2889,7 @@ mod tests {
                     seed: None,
                     staker: None,
                     withdrawer: None,
+                    withdrawer_signer: None,
                     lockup: Lockup::default(),
                     amount: SpendAmount::Some(50_000_000_000),
                     sign_only: false,
@@ -2814,6 +2907,58 @@ mod tests {
                 ],
             }
         );
+        let (withdrawer_keypair_file, mut tmp_file) = make_tmp_file();
+        let withdrawer_keypair = Keypair::new();
+        write_keypair(&withdrawer_keypair, tmp_file.as_file_mut()).unwrap();
+        let test_create_stake_account = test_commands.clone().get_matches_from(vec![
+            "test",
+            "create-stake-account-checked",
+            &keypair_file,
+            "50",
+            "--stake-authority",
+            &authorized_string,
+            "--withdraw-authority",
+            &withdrawer_keypair_file,
+        ]);
+        assert_eq!(
+            parse_command(&test_create_stake_account, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::CreateStakeAccount {
+                    stake_account: 1,
+                    seed: None,
+                    staker: Some(authorized),
+                    withdrawer: Some(withdrawer_keypair.pubkey()),
+                    withdrawer_signer: Some(2),
+                    lockup: Lockup::default(),
+                    amount: SpendAmount::Some(50_000_000_000),
+                    sign_only: false,
+                    dump_transaction_message: false,
+                    blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+                    nonce_account: None,
+                    nonce_authority: 0,
+                    memo: None,
+                    fee_payer: 0,
+                    from: 0,
+                },
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    stake_account_keypair.into(),
+                    withdrawer_keypair.into(),
+                ],
+            }
+        );
+
+        let test_create_stake_account = test_commands.clone().get_matches_from(vec![
+            "test",
+            "create-stake-account-checked",
+            &keypair_file,
+            "50",
+            "--stake-authority",
+            &authorized_string,
+            "--withdraw-authority",
+            &authorized_string,
+        ]);
+        assert!(parse_command(&test_create_stake_account, &default_signer, &mut None).is_err());
 
         // CreateStakeAccount offline and nonce
         let nonce_account = Pubkey::new(&[1u8; 32]);
@@ -2852,6 +2997,7 @@ mod tests {
                     seed: None,
                     staker: None,
                     withdrawer: None,
+                    withdrawer_signer: None,
                     lockup: Lockup::default(),
                     amount: SpendAmount::Some(50_000_000_000),
                     sign_only: false,

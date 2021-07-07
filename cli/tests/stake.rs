@@ -64,6 +64,7 @@ fn test_stake_delegation_force() {
         seed: None,
         staker: None,
         withdrawer: None,
+        withdrawer_signer: None,
         lockup: Lockup::default(),
         amount: SpendAmount::Some(50_000),
         sign_only: false,
@@ -151,6 +152,7 @@ fn test_seed_stake_delegation_and_deactivation() {
         seed: Some("hi there".to_string()),
         staker: None,
         withdrawer: None,
+        withdrawer_signer: None,
         lockup: Lockup::default(),
         amount: SpendAmount::Some(50_000),
         sign_only: false,
@@ -231,6 +233,7 @@ fn test_stake_delegation_and_deactivation() {
         seed: None,
         staker: None,
         withdrawer: None,
+        withdrawer_signer: None,
         lockup: Lockup::default(),
         amount: SpendAmount::Some(50_000),
         sign_only: false,
@@ -332,6 +335,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         seed: None,
         staker: Some(config_offline.signers[0].pubkey()),
         withdrawer: None,
+        withdrawer_signer: None,
         lockup: Lockup::default(),
         amount: SpendAmount::Some(50_000),
         sign_only: false,
@@ -451,6 +455,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
         seed: None,
         staker: None,
         withdrawer: None,
+        withdrawer_signer: None,
         lockup: Lockup::default(),
         amount: SpendAmount::Some(50_000),
         sign_only: false,
@@ -581,6 +586,7 @@ fn test_stake_authorize() {
         seed: None,
         staker: None,
         withdrawer: None,
+        withdrawer_signer: None,
         lockup: Lockup::default(),
         amount: SpendAmount::Some(50_000),
         sign_only: false,
@@ -861,6 +867,7 @@ fn test_stake_authorize_with_fee_payer() {
         seed: None,
         staker: None,
         withdrawer: None,
+        withdrawer_signer: None,
         lockup: Lockup::default(),
         amount: SpendAmount::Some(50_000),
         sign_only: false,
@@ -985,6 +992,7 @@ fn test_stake_split() {
         seed: None,
         staker: Some(offline_pubkey),
         withdrawer: Some(offline_pubkey),
+        withdrawer_signer: None,
         lockup: Lockup::default(),
         amount: SpendAmount::Some(10 * minimum_stake_balance),
         sign_only: false,
@@ -1135,6 +1143,7 @@ fn test_stake_set_lockup() {
         seed: None,
         staker: Some(offline_pubkey),
         withdrawer: Some(config.signers[0].pubkey()),
+        withdrawer_signer: None,
         lockup,
         amount: SpendAmount::Some(10 * minimum_stake_balance),
         sign_only: false,
@@ -1409,6 +1418,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         seed: None,
         staker: None,
         withdrawer: None,
+        withdrawer_signer: None,
         lockup: Lockup::default(),
         amount: SpendAmount::Some(50_000),
         sign_only: true,
@@ -1432,6 +1442,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         seed: None,
         staker: Some(offline_pubkey),
         withdrawer: None,
+        withdrawer_signer: None,
         lockup: Lockup::default(),
         amount: SpendAmount::Some(50_000),
         sign_only: false,
@@ -1521,6 +1532,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         seed: Some(seed.to_string()),
         staker: None,
         withdrawer: None,
+        withdrawer_signer: None,
         lockup: Lockup::default(),
         amount: SpendAmount::Some(50_000),
         sign_only: true,
@@ -1542,6 +1554,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         seed: Some(seed.to_string()),
         staker: Some(offline_pubkey),
         withdrawer: Some(offline_pubkey),
+        withdrawer_signer: None,
         lockup: Lockup::default(),
         amount: SpendAmount::Some(50_000),
         sign_only: false,
@@ -1560,4 +1573,69 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
     let seed_address =
         Pubkey::create_with_seed(&stake_pubkey, seed, &stake::program::id()).unwrap();
     check_recent_balance(50_000, &rpc_client, &seed_address);
+}
+
+#[test]
+fn test_stake_checked_instructions() {
+    solana_logger::setup();
+
+    let mint_keypair = Keypair::new();
+    let mint_pubkey = mint_keypair.pubkey();
+    let faucet_addr = run_local_faucet(mint_keypair, None);
+    let test_validator = TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr));
+
+    let rpc_client =
+        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
+    let default_signer = Keypair::new();
+
+    let mut config = CliConfig::recent_for_tests();
+    config.json_rpc_url = test_validator.rpc_url();
+    config.signers = vec![&default_signer];
+
+    request_and_confirm_airdrop(&rpc_client, &config, &config.signers[0].pubkey(), 100_000)
+        .unwrap();
+
+    // Create stake account with withdrawer
+    let stake_keypair = Keypair::new();
+    let stake_account_pubkey = stake_keypair.pubkey();
+    let withdrawer_keypair = Keypair::new();
+    let withdrawer_pubkey = withdrawer_keypair.pubkey();
+    config.signers.push(&stake_keypair);
+    config.command = CliCommand::CreateStakeAccount {
+        stake_account: 1,
+        seed: None,
+        staker: None,
+        withdrawer: Some(withdrawer_pubkey),
+        withdrawer_signer: Some(1),
+        lockup: Lockup::default(),
+        amount: SpendAmount::Some(50_000),
+        sign_only: false,
+        dump_transaction_message: false,
+        blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+        nonce_account: None,
+        nonce_authority: 0,
+        memo: None,
+        fee_payer: 0,
+        from: 0,
+    };
+    process_command(&config).unwrap_err(); // unsigned authority should fail
+    config.signers = vec![&default_signer, &stake_keypair, &withdrawer_keypair];
+    config.command = CliCommand::CreateStakeAccount {
+        stake_account: 1,
+        seed: None,
+        staker: None,
+        withdrawer: Some(withdrawer_pubkey),
+        withdrawer_signer: Some(1),
+        lockup: Lockup::default(),
+        amount: SpendAmount::Some(50_000),
+        sign_only: false,
+        dump_transaction_message: false,
+        blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+        nonce_account: None,
+        nonce_authority: 0,
+        memo: None,
+        fee_payer: 0,
+        from: 0,
+    };
+    process_command(&config).unwrap();
 }
