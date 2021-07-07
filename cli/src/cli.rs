@@ -1735,7 +1735,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         ),
         CliCommand::StakeSetLockup {
             stake_account_pubkey,
-            mut lockup,
+            lockup,
             custodian,
             new_custodian_signer,
             sign_only,
@@ -1749,7 +1749,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             &rpc_client,
             config,
             stake_account_pubkey,
-            &mut lockup,
+            lockup,
             *new_custodian_signer,
             *custodian,
             *sign_only,

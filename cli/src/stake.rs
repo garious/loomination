@@ -1778,7 +1778,7 @@ pub fn process_stake_set_lockup(
     rpc_client: &RpcClient,
     config: &CliConfig,
     stake_account_pubkey: &Pubkey,
-    lockup: &mut LockupArgs,
+    lockup: &LockupArgs,
     new_custodian_signer: Option<SignerIndex>,
     custodian: SignerIndex,
     sign_only: bool,
