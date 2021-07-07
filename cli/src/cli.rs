@@ -45,11 +45,7 @@ use solana_sdk::{
     message::Message,
     pubkey::Pubkey,
     signature::{Signature, Signer, SignerError},
-    stake::{
-        self,
-        instruction::LockupArgs,
-        state::{Lockup, StakeAuthorize},
-    },
+    stake::{self, instruction::LockupArgs, state::Lockup},
     system_instruction::{self, SystemError},
     system_program,
     transaction::{Transaction, TransactionError},
@@ -272,7 +268,7 @@ pub enum CliCommand {
     },
     StakeAuthorize {
         stake_account_pubkey: Pubkey,
-        new_authorizations: Vec<(StakeAuthorize, Pubkey, SignerIndex)>,
+        new_authorizations: Vec<StakeAuthorizationIndexed>,
         sign_only: bool,
         dump_transaction_message: bool,
         blockhash_query: BlockhashQuery,
@@ -744,7 +740,10 @@ pub fn parse_command(
             parse_merge_stake(matches, default_signer, wallet_manager)
         }
         ("stake-authorize", Some(matches)) => {
-            parse_stake_authorize(matches, default_signer, wallet_manager)
+            parse_stake_authorize(matches, default_signer, wallet_manager, !CHECKED)
+        }
+        ("stake-authorize-checked", Some(matches)) => {
+            parse_stake_authorize(matches, default_signer, wallet_manager, CHECKED)
         }
         ("stake-set-lockup", Some(matches)) => {
             parse_stake_set_lockup(matches, default_signer, wallet_manager, !CHECKED)

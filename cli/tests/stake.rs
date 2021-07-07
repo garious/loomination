@@ -1,6 +1,7 @@
 use solana_cli::{
     cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig},
     spend_utils::SpendAmount,
+    stake::StakeAuthorizationIndexed,
     test_utils::{check_ready, check_recent_balance},
 };
 use solana_cli_output::{parse_sign_only_reply_string, OutputFormat};
@@ -606,7 +607,12 @@ fn test_stake_authorize() {
     config.signers.pop();
     config.command = CliCommand::StakeAuthorize {
         stake_account_pubkey,
-        new_authorizations: vec![(StakeAuthorize::Staker, online_authority_pubkey, 0)],
+        new_authorizations: vec![StakeAuthorizationIndexed {
+            authorization_type: StakeAuthorize::Staker,
+            new_authority_pubkey: online_authority_pubkey,
+            authority: 0,
+            new_authority_signer: None,
+        }],
         sign_only: false,
         dump_transaction_message: false,
         blockhash_query: BlockhashQuery::default(),
@@ -635,8 +641,18 @@ fn test_stake_authorize() {
     config.command = CliCommand::StakeAuthorize {
         stake_account_pubkey,
         new_authorizations: vec![
-            (StakeAuthorize::Staker, online_authority2_pubkey, 1),
-            (StakeAuthorize::Withdrawer, withdraw_authority_pubkey, 0),
+            StakeAuthorizationIndexed {
+                authorization_type: StakeAuthorize::Staker,
+                new_authority_pubkey: online_authority2_pubkey,
+                authority: 1,
+                new_authority_signer: None,
+            },
+            StakeAuthorizationIndexed {
+                authorization_type: StakeAuthorize::Withdrawer,
+                new_authority_pubkey: withdraw_authority_pubkey,
+                authority: 0,
+                new_authority_signer: None,
+            },
         ],
         sign_only: false,
         dump_transaction_message: false,
@@ -663,7 +679,12 @@ fn test_stake_authorize() {
     config.signers.push(&online_authority2);
     config.command = CliCommand::StakeAuthorize {
         stake_account_pubkey,
-        new_authorizations: vec![(StakeAuthorize::Staker, offline_authority_pubkey, 1)],
+        new_authorizations: vec![StakeAuthorizationIndexed {
+            authorization_type: StakeAuthorize::Staker,
+            new_authority_pubkey: offline_authority_pubkey,
+            authority: 1,
+            new_authority_signer: None,
+        }],
         sign_only: false,
         dump_transaction_message: false,
         blockhash_query: BlockhashQuery::default(),
@@ -689,7 +710,12 @@ fn test_stake_authorize() {
     let (blockhash, _) = rpc_client.get_recent_blockhash().unwrap();
     config_offline.command = CliCommand::StakeAuthorize {
         stake_account_pubkey,
-        new_authorizations: vec![(StakeAuthorize::Staker, nonced_authority_pubkey, 0)],
+        new_authorizations: vec![StakeAuthorizationIndexed {
+            authorization_type: StakeAuthorize::Staker,
+            new_authority_pubkey: nonced_authority_pubkey,
+            authority: 0,
+            new_authority_signer: None,
+        }],
         sign_only: true,
         dump_transaction_message: false,
         blockhash_query: BlockhashQuery::None(blockhash),
@@ -708,7 +734,12 @@ fn test_stake_authorize() {
     config.signers = vec![&offline_presigner];
     config.command = CliCommand::StakeAuthorize {
         stake_account_pubkey,
-        new_authorizations: vec![(StakeAuthorize::Staker, nonced_authority_pubkey, 0)],
+        new_authorizations: vec![StakeAuthorizationIndexed {
+            authorization_type: StakeAuthorize::Staker,
+            new_authority_pubkey: nonced_authority_pubkey,
+            authority: 0,
+            new_authority_signer: None,
+        }],
         sign_only: false,
         dump_transaction_message: false,
         blockhash_query: BlockhashQuery::FeeCalculator(blockhash_query::Source::Cluster, blockhash),
@@ -759,7 +790,12 @@ fn test_stake_authorize() {
     config_offline.signers.push(&nonced_authority);
     config_offline.command = CliCommand::StakeAuthorize {
         stake_account_pubkey,
-        new_authorizations: vec![(StakeAuthorize::Staker, online_authority_pubkey, 1)],
+        new_authorizations: vec![StakeAuthorizationIndexed {
+            authorization_type: StakeAuthorize::Staker,
+            new_authority_pubkey: online_authority_pubkey,
+            authority: 1,
+            new_authority_signer: None,
+        }],
         sign_only: true,
         dump_transaction_message: false,
         blockhash_query: BlockhashQuery::None(nonce_hash),
@@ -779,7 +815,12 @@ fn test_stake_authorize() {
     config.signers = vec![&offline_presigner, &nonced_authority_presigner];
     config.command = CliCommand::StakeAuthorize {
         stake_account_pubkey,
-        new_authorizations: vec![(StakeAuthorize::Staker, online_authority_pubkey, 1)],
+        new_authorizations: vec![StakeAuthorizationIndexed {
+            authorization_type: StakeAuthorize::Staker,
+            new_authority_pubkey: online_authority_pubkey,
+            authority: 1,
+            new_authority_signer: None,
+        }],
         sign_only: false,
         dump_transaction_message: false,
         blockhash_query: BlockhashQuery::FeeCalculator(
@@ -887,7 +928,12 @@ fn test_stake_authorize_with_fee_payer() {
     config.signers = vec![&default_signer, &payer_keypair];
     config.command = CliCommand::StakeAuthorize {
         stake_account_pubkey,
-        new_authorizations: vec![(StakeAuthorize::Staker, offline_pubkey, 0)],
+        new_authorizations: vec![StakeAuthorizationIndexed {
+            authorization_type: StakeAuthorize::Staker,
+            new_authority_pubkey: offline_pubkey,
+            authority: 0,
+            new_authority_signer: None,
+        }],
         sign_only: false,
         dump_transaction_message: false,
         blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
@@ -909,7 +955,12 @@ fn test_stake_authorize_with_fee_payer() {
     let (blockhash, _) = rpc_client.get_recent_blockhash().unwrap();
     config_offline.command = CliCommand::StakeAuthorize {
         stake_account_pubkey,
-        new_authorizations: vec![(StakeAuthorize::Staker, payer_pubkey, 0)],
+        new_authorizations: vec![StakeAuthorizationIndexed {
+            authorization_type: StakeAuthorize::Staker,
+            new_authority_pubkey: payer_pubkey,
+            authority: 0,
+            new_authority_signer: None,
+        }],
         sign_only: true,
         dump_transaction_message: false,
         blockhash_query: BlockhashQuery::None(blockhash),
@@ -928,7 +979,12 @@ fn test_stake_authorize_with_fee_payer() {
     config.signers = vec![&offline_presigner];
     config.command = CliCommand::StakeAuthorize {
         stake_account_pubkey,
-        new_authorizations: vec![(StakeAuthorize::Staker, payer_pubkey, 0)],
+        new_authorizations: vec![StakeAuthorizationIndexed {
+            authorization_type: StakeAuthorize::Staker,
+            new_authority_pubkey: payer_pubkey,
+            authority: 0,
+            new_authority_signer: None,
+        }],
         sign_only: false,
         dump_transaction_message: false,
         blockhash_query: BlockhashQuery::FeeCalculator(blockhash_query::Source::Cluster, blockhash),
@@ -1646,6 +1702,113 @@ fn test_stake_checked_instructions() {
     };
     process_command(&config).unwrap();
 
+    // Re-authorize account, checking new authority
+    let staker_keypair = Keypair::new();
+    let staker_pubkey = staker_keypair.pubkey();
+    config.signers = vec![&default_signer];
+    config.command = CliCommand::StakeAuthorize {
+        stake_account_pubkey,
+        new_authorizations: vec![StakeAuthorizationIndexed {
+            authorization_type: StakeAuthorize::Staker,
+            new_authority_pubkey: staker_pubkey,
+            authority: 0,
+            new_authority_signer: Some(0),
+        }],
+        sign_only: false,
+        dump_transaction_message: false,
+        blockhash_query: BlockhashQuery::default(),
+        nonce_account: None,
+        nonce_authority: 0,
+        memo: None,
+        fee_payer: 0,
+        custodian: None,
+        no_wait: false,
+    };
+    process_command(&config).unwrap_err(); // unsigned authority should fail
+
+    config.signers = vec![&default_signer, &staker_keypair];
+    config.command = CliCommand::StakeAuthorize {
+        stake_account_pubkey,
+        new_authorizations: vec![StakeAuthorizationIndexed {
+            authorization_type: StakeAuthorize::Staker,
+            new_authority_pubkey: staker_pubkey,
+            authority: 0,
+            new_authority_signer: Some(1),
+        }],
+        sign_only: false,
+        dump_transaction_message: false,
+        blockhash_query: BlockhashQuery::default(),
+        nonce_account: None,
+        nonce_authority: 0,
+        memo: None,
+        fee_payer: 0,
+        custodian: None,
+        no_wait: false,
+    };
+    process_command(&config).unwrap();
+    let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
+    let stake_state: StakeState = stake_account.state().unwrap();
+    let current_authority = match stake_state {
+        StakeState::Initialized(meta) => meta.authorized.staker,
+        _ => panic!("Unexpected stake state!"),
+    };
+    assert_eq!(current_authority, staker_pubkey);
+
+    let new_withdrawer_keypair = Keypair::new();
+    let new_withdrawer_pubkey = new_withdrawer_keypair.pubkey();
+    config.signers = vec![&default_signer, &withdrawer_keypair];
+    config.command = CliCommand::StakeAuthorize {
+        stake_account_pubkey,
+        new_authorizations: vec![StakeAuthorizationIndexed {
+            authorization_type: StakeAuthorize::Withdrawer,
+            new_authority_pubkey: new_withdrawer_pubkey,
+            authority: 1,
+            new_authority_signer: Some(1),
+        }],
+        sign_only: false,
+        dump_transaction_message: false,
+        blockhash_query: BlockhashQuery::default(),
+        nonce_account: None,
+        nonce_authority: 0,
+        memo: None,
+        fee_payer: 0,
+        custodian: None,
+        no_wait: false,
+    };
+    process_command(&config).unwrap_err(); // unsigned authority should fail
+
+    config.signers = vec![
+        &default_signer,
+        &withdrawer_keypair,
+        &new_withdrawer_keypair,
+    ];
+    config.command = CliCommand::StakeAuthorize {
+        stake_account_pubkey,
+        new_authorizations: vec![StakeAuthorizationIndexed {
+            authorization_type: StakeAuthorize::Withdrawer,
+            new_authority_pubkey: new_withdrawer_pubkey,
+            authority: 1,
+            new_authority_signer: Some(2),
+        }],
+        sign_only: false,
+        dump_transaction_message: false,
+        blockhash_query: BlockhashQuery::default(),
+        nonce_account: None,
+        nonce_authority: 0,
+        memo: None,
+        fee_payer: 0,
+        custodian: None,
+        no_wait: false,
+    };
+    process_command(&config).unwrap();
+    let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
+    let stake_state: StakeState = stake_account.state().unwrap();
+    let current_authority = match stake_state {
+        StakeState::Initialized(meta) => meta.authorized.withdrawer,
+        _ => panic!("Unexpected stake state!"),
+    };
+    assert_eq!(current_authority, new_withdrawer_pubkey);
+
     // Set lockup, checking new custodian
     let custodian = Keypair::new();
     let custodian_pubkey = custodian.pubkey();
@@ -1654,7 +1817,7 @@ fn test_stake_checked_instructions() {
         epoch: Some(200),
         custodian: Some(custodian_pubkey),
     };
-    config.signers = vec![&default_signer, &withdrawer_keypair];
+    config.signers = vec![&default_signer, &new_withdrawer_keypair];
     config.command = CliCommand::StakeSetLockup {
         stake_account_pubkey,
         lockup,
@@ -1670,7 +1833,7 @@ fn test_stake_checked_instructions() {
     };
     process_command(&config).unwrap_err(); // unsigned new custodian should fail
 
-    config.signers = vec![&default_signer, &withdrawer_keypair, &custodian];
+    config.signers = vec![&default_signer, &new_withdrawer_keypair, &custodian];
     config.command = CliCommand::StakeSetLockup {
         stake_account_pubkey,
         lockup,
@@ -1687,7 +1850,6 @@ fn test_stake_checked_instructions() {
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
     let stake_state: StakeState = stake_account.state().unwrap();
-    println!("{:?}", stake_state);
     let current_lockup = match stake_state {
         StakeState::Initialized(meta) => meta.lockup,
         _ => panic!("Unexpected stake state!"),
