@@ -1,10 +1,5 @@
 // Blockstore functions specific to the storage of shreds
 
-// TODO: Think about limiting cache size; this comment should probably go with others in ledger_cleanup_service.rs
-// - Shreds are at most 1228 bytes, use 1500 bytes for margin
-// - 5k shreds/slot (50k TPS) * 1500 bytes = 7.5 MB / slot
-// - 2 GB cache limit / 7.5 MB = 266 slots
-
 use super::*;
 use crate::shred::SHRED_PAYLOAD_SIZE;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -185,20 +180,27 @@ impl Blockstore {
     }
 
     pub(crate) fn insert_data_shred_into_cache(&self, slot: Slot, index: u64, shred: &Shred) {
-        let data_slot_cache = self.data_slot_cache(slot).unwrap_or_else(||
+        let data_slot_cache = self.data_slot_cache(slot).unwrap_or_else(|| {
             // Inner map for slot does not exist, let's create it
             // DashMap .entry().or_insert() returns a RefMut, essentially a write lock,
             // which is dropped after this block ends, minimizing time held by the lock.
             // We still need a reference to the `ShredCache` behind the lock, hence, we
             // clone it out (`ShredCache` is an Arc so it is cheap to clone).
-            self.data_shred_cache.entry(slot).or_insert(Arc::new(RwLock::new(BTreeMap::new()))).clone());
+            self.data_shred_cache_slots.lock().unwrap().insert(slot);
+            self.data_shred_cache
+                .entry(slot)
+                .or_insert(Arc::new(RwLock::new(BTreeMap::new())))
+                .clone()
+        });
         data_slot_cache
             .write()
             .unwrap()
             .insert(index, shred.payload.clone());
     }
 
-    pub(crate) fn flush_data_shreds_for_slot_to_fs(&self, slot: Slot) -> Result<()> {
+    // TODO: change this back to pub(crate); possibly need to make wrapper in blockstore_purge instead
+    // of in ledger_cleanup_service
+    pub fn flush_data_shreds_for_slot_to_fs(&self, slot: Slot) -> Result<()> {
         {
             // First, check if we have a cache for this slot
             let slot_cache = match self.data_slot_cache(slot) {
@@ -213,7 +215,7 @@ impl Blockstore {
 
             // Write contents to a temporary file first. We will later rename the file;
             // in this way, we approximate an atomic file write
-            // TODO: Should we make this check if file already exists instead of clobbering it
+            // TODO: Should this check if file already exists instead of clobbering it
             let mut file = fs::File::create(temp_path)?;
             let result: Result<Vec<_>> = slot_cache
                 .read()
@@ -233,8 +235,9 @@ impl Blockstore {
             let path = Path::new(&path);
             fs::rename(temp_path, path)?;
         }
-        // TODO: ENABLE DROP FROM CACHE ONCE DONE TESTING
-        // self.data_shred_cache.remove(&slot);
+        // Slot has successfully been persisted, drop it from cache
+        self.data_shred_cache.remove(&slot);
+        self.data_shred_cache_slots.lock().unwrap().remove(&slot);
         Ok(())
     }
 
@@ -289,7 +292,9 @@ impl Blockstore {
     }
 
     pub(crate) fn shred_storage_size(&self) -> Result<u64> {
-        Ok(fs_extra::dir::get_size(&self.ledger_path.join(SHRED_DIRECTORY))?)
+        Ok(fs_extra::dir::get_size(
+            &self.ledger_path.join(SHRED_DIRECTORY),
+        )?)
     }
 
     fn slot_data_shreds_path(&self, slot: Slot) -> String {

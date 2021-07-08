@@ -45,7 +45,7 @@ use std::{
     borrow::Cow,
     cell::RefCell,
     cmp,
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     convert::TryInto,
     fs,
     io::{Error as IoError, ErrorKind},
@@ -156,6 +156,8 @@ pub struct Blockstore {
     slots_stats: Arc<Mutex<SlotsStats>>,
     data_shred_path: PathBuf,
     data_shred_cache: DashMap<Slot, Arc<RwLock<ShredCache>>>,
+    // TODO: probably don't want this pub, work in a helper function for ledger_cleanup
+    pub data_shred_cache_slots: Mutex<BTreeSet<Slot>>,
     shred_wal: Mutex<ShredWAL>,
 }
 
@@ -412,6 +414,7 @@ impl Blockstore {
             slots_stats: Arc::new(Mutex::new(SlotsStats::default())),
             data_shred_path,
             data_shred_cache: DashMap::new(),
+            data_shred_cache_slots: Mutex::new(BTreeSet::new()),
             shred_wal,
         };
         if initialize_transaction_status_index {
@@ -1276,12 +1279,8 @@ impl Blockstore {
         }
 
         let set_index = u64::from(shred.common_header.fec_set_index);
-        let newly_completed_data_sets = self.insert_data_shred(
-            slot_meta,
-            index_meta.data_mut(),
-            &shred,
-            shred_source,
-        )?;
+        let newly_completed_data_sets =
+            self.insert_data_shred(slot_meta, index_meta.data_mut(), &shred, shred_source)?;
         just_inserted_data_shreds.insert((slot, shred_index), shred);
         index_meta_working_set_entry.did_insert_occur = true;
         slot_meta_entry.did_insert_occur = true;
