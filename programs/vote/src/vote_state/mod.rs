@@ -1,7 +1,7 @@
 //! Vote state, vote program
 //! Receive and processes votes from validators
 use crate::authorized_voters::AuthorizedVoters;
-use crate::{id, vote_instruction::VoteError};
+use crate::{id, node_instance, vote_instruction::VoteError};
 use bincode::{deserialize, serialize_into, serialized_size, ErrorKind};
 use log::*;
 use serde_derive::{Deserialize, Serialize};
@@ -736,6 +736,17 @@ pub fn process_vote<S: std::hash::BuildHasher>(
     vote: &Vote,
     signers: &HashSet<Pubkey, S>,
 ) -> Result<(), InstructionError> {
+    process_vote_with_node_instance(vote_account, slot_hashes, clock, vote, signers, None)
+}
+
+pub fn process_vote_with_node_instance<S: std::hash::BuildHasher>(
+    vote_account: &KeyedAccount,
+    slot_hashes: &[SlotHash],
+    clock: &Clock,
+    vote: &Vote,
+    signers: &HashSet<Pubkey, S>,
+    node_instance_info: Option<(&KeyedAccount, node_instance::InstanceId)>,
+) -> Result<(), InstructionError> {
     let versioned = State::<VoteStateVersions>::state(vote_account)?;
 
     if versioned.is_uninitialized() {
@@ -745,6 +756,20 @@ pub fn process_vote<S: std::hash::BuildHasher>(
     let mut vote_state = versioned.convert_to_current();
     let authorized_voter = vote_state.get_and_update_authorized_voter(clock.epoch)?;
     verify_authorized_signer(&authorized_voter, signers)?;
+
+    if let Some((node_instance_account, instance_id)) = node_instance_info {
+        if node_instance_account.owner()? != node_instance::id() {
+            return Err(InstructionError::InvalidAccountOwner);
+        }
+        let node_instance_state =
+            State::<node_instance::NodeInstanceState>::state(node_instance_account)?;
+        if node_instance_state.identity != vote_state.node_pubkey {
+            return Err(InstructionError::InvalidAccountData);
+        }
+        if node_instance_state.instance_id != instance_id {
+            return Err(InstructionError::GenericError);
+        }
+    }
 
     vote_state.process_vote(vote, slot_hashes, clock.epoch)?;
     if let Some(timestamp) = vote.timestamp {

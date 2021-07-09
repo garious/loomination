@@ -134,6 +134,43 @@ pub fn parse_vote(
                 }),
             })
         }
+        VoteInstruction::VoteWithInstance(vote, instance_id) => {
+            check_num_vote_accounts(&instruction.accounts, 3)?;
+            let vote = json!({
+                "slots": vote.slots,
+                "hash": vote.hash.to_string(),
+                "timestamp": vote.timestamp,
+            });
+            Ok(ParsedInstructionEnum {
+                instruction_type: "voteWithInstance".to_string(),
+                info: json!({
+                    "voteAccount": account_keys[instruction.accounts[0] as usize].to_string(),
+                    "voteAuthority": account_keys[instruction.accounts[1] as usize].to_string(),
+                    "nodeInstance": account_keys[instruction.accounts[2] as usize].to_string(),
+                    "vote": vote,
+                    "instanceId": instance_id,
+                }),
+            })
+        }
+        VoteInstruction::VoteSwitchWithInstance(vote, instance_id, hash) => {
+            check_num_vote_accounts(&instruction.accounts, 3)?;
+            let vote = json!({
+                "slots": vote.slots,
+                "hash": vote.hash.to_string(),
+                "timestamp": vote.timestamp,
+            });
+            Ok(ParsedInstructionEnum {
+                instruction_type: "voteSwitchWithInstance".to_string(),
+                info: json!({
+                    "voteAccount": account_keys[instruction.accounts[0] as usize].to_string(),
+                    "voteAuthority": account_keys[instruction.accounts[1] as usize].to_string(),
+                    "nodeInstance": account_keys[instruction.accounts[2] as usize].to_string(),
+                    "vote": vote,
+                    "instanceId": instance_id,
+                    "hash": hash.to_string(),
+                }),
+            })
+        }
     }
 }
 

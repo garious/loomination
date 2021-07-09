@@ -37,8 +37,12 @@ pub fn parse_vote_transaction(tx: &Transaction) -> Option<(Pubkey, Vote, Option<
                     .and_then(|key| {
                         let vote_instruction = limited_deserialize(&first_instruction.data).ok();
                         vote_instruction.and_then(|vote_instruction| match vote_instruction {
-                            VoteInstruction::Vote(vote) => Some((*key, vote, None)),
-                            VoteInstruction::VoteSwitch(vote, hash) => {
+                            VoteInstruction::Vote(vote)
+                            | VoteInstruction::VoteWithInstance(vote, ..) => {
+                                Some((*key, vote, None))
+                            }
+                            VoteInstruction::VoteSwitch(vote, hash)
+                            | VoteInstruction::VoteSwitchWithInstance(vote, .., hash) => {
                                 Some((*key, vote, Some(hash)))
                             }
                             _ => None,
