@@ -46,10 +46,12 @@ pub enum UpgradeableLoaderInstruction {
     /// The ProgramData address is derived from the Program account's address as
     /// follows:
     ///
-    /// `let (program_data_address, _) = Pubkey::find_program_address(
+    /// ```
+    /// let (program_data_address, _) = Pubkey::find_program_address(
     ///      &[program_address],
     ///      &bpf_loader_upgradeable::id()
-    ///  );`
+    ///  );
+    /// ```
     ///
     /// The `DeployWithMaxDataLen` instruction does not require the ProgramData
     /// account be a signer and therefore MUST be included within the same
