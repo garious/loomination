@@ -8,7 +8,7 @@ pub struct PurgeStats {
 }
 
 impl Blockstore {
-    /// Silently deletes all blockstore column families in the range [from_slot,to_slot]
+    /// Silently deletes all blockstore column families in the range \[from_slot,to_slot\]
     /// Dangerous; Use with care:
     /// Does not check for integrity and does not update slot metas that refer to deleted slots
     /// Modifies multiple column families simultaneously
@@ -57,7 +57,7 @@ impl Blockstore {
     }
 
     /// Ensures that the SlotMeta::next_slots vector for all slots contain no references in the
-    /// [from_slot,to_slot] range
+    /// \[from_slot,to_slot\] range
     ///
     /// Dangerous; Use with care
     pub fn purge_from_next_slots(&self, from_slot: Slot, to_slot: Slot) {
