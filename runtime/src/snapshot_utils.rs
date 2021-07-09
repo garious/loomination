@@ -250,7 +250,7 @@ where
 
 /// Package up slot snapshot files, snapshot storages, and slot deltas for an incremental snapshot.
 #[allow(clippy::too_many_arguments)]
-fn package_incremental_snapshot<P, Q>(
+pub fn package_incremental_snapshot<P, Q>(
     bank: &Bank,
     incremental_snapshot_base_slot: Slot,
     snapshot_files: &SlotSnapshotPaths,
@@ -302,6 +302,7 @@ where
     )
 }
 
+/// Create a snapshot package
 fn do_package_snapshot<P>(
     bank: &Bank,
     snapshot_files: &SlotSnapshotPaths,
@@ -316,13 +317,9 @@ fn do_package_snapshot<P>(
 where
     P: AsRef<Path>,
 {
-    // Create a snapshot package
-
     // Hard link the snapshot into a tmpdir, to ensure its not removed prior to packaging.
     {
-        let snapshot_hardlink_dir = snapshot_tmpdir
-            .as_ref()
-            .join(snapshot_files.slot.to_string());
+        let snapshot_hardlink_dir = snapshot_tmpdir.path().join(snapshot_files.slot.to_string());
         fs::create_dir_all(&snapshot_hardlink_dir)?;
         fs::hard_link(
             &snapshot_files.snapshot_file_path,
@@ -783,6 +780,7 @@ where
     Ok(())
 }
 
+/// Serialize a bank's snapshot storages to the filesystem
 pub fn add_snapshot<P: AsRef<Path>>(
     snapshot_path: P,
     bank: &Bank,
@@ -792,7 +790,7 @@ pub fn add_snapshot<P: AsRef<Path>>(
     let slot = bank.slot();
     // snapshot_path/slot
     let slot_snapshot_dir = get_bank_snapshot_dir(snapshot_path, slot);
-    fs::create_dir_all(slot_snapshot_dir.clone())?;
+    fs::create_dir_all(&slot_snapshot_dir)?;
 
     // the bank snapshot is stored as snapshot_path/slot/slot
     let snapshot_bank_file_path = slot_snapshot_dir.join(get_snapshot_file_name(slot));
@@ -915,9 +913,8 @@ where
 }
 
 /// Rebuild a bank from full and incremental snapshot archives
-#[cfg(test)]
 #[allow(clippy::too_many_arguments)]
-fn bank_from_incremental_snapshot_archive<P, Q>(
+pub fn bank_from_incremental_snapshot_archive<P, Q>(
     account_paths: &[PathBuf],
     frozen_account_pubkeys: &[Pubkey],
     snapshot_path: &Path,
@@ -1415,7 +1412,7 @@ where
     P: AsRef<Path>,
 {
     info!(
-        "Purging old snapshots in {}, retaining {}",
+        "Purging old snapshot archives in {}, retaining {}",
         snapshot_output_dir.as_ref().display(),
         maximum_snapshots_to_retain
     );
@@ -1429,7 +1426,7 @@ where
             old_archive.path.display()
         );
         fs::remove_file(old_archive.path)
-            .unwrap_or_else(|err| info!("Failed to remove old snapshot: {}", err));
+            .unwrap_or_else(|err| info!("Failed to remove old snapshot archive: {}", err));
     }
 
     // Only keep incremental snapshots for the latest full snapshot
@@ -1445,8 +1442,9 @@ where
                 "Purging old incremental snapshot archive: {}",
                 old_archive.path.display()
             );
-            fs::remove_file(old_archive.path.as_path())
-                .unwrap_or_else(|err| info!("Failed to remove old incremental snapshot: {}", err))
+            fs::remove_file(old_archive.path.as_path()).unwrap_or_else(|err| {
+                info!("Failed to remove old incremental snapshot archive: {}", err)
+            })
         });
 }
 
@@ -1693,14 +1691,14 @@ pub fn verify_snapshot_archive<P, Q, R>(
     assert!(!dir_diff::is_different(&storages_to_verify, unpacked_accounts).unwrap());
 }
 
+/// Remove outdated snapshots
 pub fn purge_old_snapshots(snapshot_path: &Path) {
-    // Remove outdated snapshots
     let slot_snapshot_paths = get_snapshot_paths(snapshot_path);
     let num_to_remove = slot_snapshot_paths.len().saturating_sub(MAX_SNAPSHOTS);
     for slot_files in &slot_snapshot_paths[..num_to_remove] {
         let r = remove_snapshot(slot_files.slot, snapshot_path);
         if r.is_err() {
-            warn!("Couldn't remove snapshot at: {:?}", snapshot_path);
+            warn!("Couldn't remove snapshot at: {}", snapshot_path.display());
         }
     }
 }
@@ -1850,7 +1848,7 @@ pub fn process_accounts_package_pre(
     do_process_accounts_package_pre(accounts_package, thread_pool, None)
 }
 
-fn process_accounts_package_pre_for_incremental_snapshot(
+pub fn process_accounts_package_pre_for_incremental_snapshot(
     accounts_package: AccountsPackagePre,
     thread_pool: Option<&ThreadPool>,
     incremental_snapshot_base_slot: Slot,
