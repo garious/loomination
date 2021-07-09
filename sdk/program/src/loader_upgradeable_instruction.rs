@@ -15,16 +15,16 @@ pub enum UpgradeableLoaderInstruction {
     /// Otherwise another party may initialize the account.
     ///
     /// # Account references
-    ///   0. [writable] source account to initialize.
-    ///   1. [] Buffer authority, optional, if omitted then the buffer will be
+    ///   0. `[writable]` source account to initialize.
+    ///   1. `[]` Buffer authority, optional, if omitted then the buffer will be
     ///      immutable.
     InitializeBuffer,
 
     /// Write program data into a Buffer account.
     ///
     /// # Account references
-    ///   0. [writable] Buffer account to write program data to.
-    ///   1. [signer] Buffer authority
+    ///   0. `[writable]` Buffer account to write program data to.
+    ///   1. `[signer]` Buffer authority
     Write {
         /// Offset at which to write the given bytes.
         offset: u32,
@@ -58,17 +58,17 @@ pub enum UpgradeableLoaderInstruction {
     /// account.
     ///
     /// # Account references
-    ///   0. [signer] The payer account that will pay to create the ProgramData
+    ///   0. `[signer]` The payer account that will pay to create the ProgramData
     ///      account.
-    ///   1. [writable] The uninitialized ProgramData account.
-    ///   2. [writable] The uninitialized Program account.
-    ///   3. [writable] The Buffer account where the program data has been
+    ///   1. `[writable]` The uninitialized ProgramData account.
+    ///   2. `[writable]` The uninitialized Program account.
+    ///   3. `[writable]` The Buffer account where the program data has been
     ///      written.  The buffer account's authority must match the program's
     ///      authority
-    ///   4. [] Rent sysvar.
-    ///   5. [] Clock sysvar.
-    ///   6. [] System program (`solana_sdk::system_program::id()`).
-    ///   7. [signer] The program's authority
+    ///   4. `[]` Rent sysvar.
+    ///   5. `[]` Clock sysvar.
+    ///   6. `[]` System program (`solana_sdk::system_program::id()`).
+    ///   7. `[signer]` The program's authority
     DeployWithMaxDataLen {
         /// Maximum length that the program can be upgraded to.
         max_data_len: usize,
@@ -85,15 +85,15 @@ pub enum UpgradeableLoaderInstruction {
     /// balance at zero.
     ///
     /// # Account references
-    ///   0. [writable] The ProgramData account.
-    ///   1. [writable] The Program account.
-    ///   2. [writable] The Buffer account where the program data has been
+    ///   0. `[writable]` The ProgramData account.
+    ///   1. `[writable]` The Program account.
+    ///   2. `[writable]` The Buffer account where the program data has been
     ///      written.  The buffer account's authority must match the program's
     ///      authority
-    ///   3. [writable] The spill account.
-    ///   4. [] Rent sysvar.
-    ///   5. [] Clock sysvar.
-    ///   6. [signer] The program's authority.
+    ///   3. `[writable]` The spill account.
+    ///   4. `[]` Rent sysvar.
+    ///   5. `[]` Clock sysvar.
+    ///   6. `[signer]` The program's authority.
     Upgrade,
 
     /// Set a new authority that is allowed to write the buffer or upgrade the

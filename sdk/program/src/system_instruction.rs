@@ -58,8 +58,8 @@ pub enum SystemInstruction {
     /// Create a new account
     ///
     /// # Account references
-    ///   0. [WRITE, SIGNER] Funding account
-    ///   1. [WRITE, SIGNER] New account
+    ///   0. `[WRITE, SIGNER]` Funding account
+    ///   1. `[WRITE, SIGNER]` New account
     CreateAccount {
         /// Number of lamports to transfer to the new account
         lamports: u64,
@@ -74,7 +74,7 @@ pub enum SystemInstruction {
     /// Assign account to a program
     ///
     /// # Account references
-    ///   0. [WRITE, SIGNER] Assigned account public key
+    ///   0. `[WRITE, SIGNER]` Assigned account public key
     Assign {
         /// Owner program account
         owner: Pubkey,
@@ -83,16 +83,16 @@ pub enum SystemInstruction {
     /// Transfer lamports
     ///
     /// # Account references
-    ///   0. [WRITE, SIGNER] Funding account
-    ///   1. [WRITE] Recipient account
+    ///   0. `[WRITE, SIGNER]` Funding account
+    ///   1. `[WRITE]` Recipient account
     Transfer { lamports: u64 },
 
     /// Create a new account at an address derived from a base pubkey and a seed
     ///
     /// # Account references
-    ///   0. [WRITE, SIGNER] Funding account
-    ///   1. [WRITE] Created account
-    ///   2. [SIGNER] (optional) Base account; the account matching the base Pubkey below must be
+    ///   0. `[WRITE, SIGNER]` Funding account
+    ///   1. `[WRITE]` Created account
+    ///   2. `[SIGNER]` (optional) Base account; the account matching the base Pubkey below must be
     ///                          provided as a signer, but may be the same as the funding account
     ///                          and provided as account 0
     CreateAccountWithSeed {
@@ -115,19 +115,19 @@ pub enum SystemInstruction {
     /// Consumes a stored nonce, replacing it with a successor
     ///
     /// # Account references
-    ///   0. [WRITE] Nonce account
-    ///   1. [] RecentBlockhashes sysvar
-    ///   2. [SIGNER] Nonce authority
+    ///   0. `[WRITE]` Nonce account
+    ///   1. `[]` RecentBlockhashes sysvar
+    ///   2. `[SIGNER]` Nonce authority
     AdvanceNonceAccount,
 
     /// Withdraw funds from a nonce account
     ///
     /// # Account references
-    ///   0. [WRITE] Nonce account
-    ///   1. [WRITE] Recipient account
-    ///   2. [] RecentBlockhashes sysvar
-    ///   3. [] Rent sysvar
-    ///   4. [SIGNER] Nonce authority
+    ///   0. `[WRITE]` Nonce account
+    ///   1. `[WRITE]` Recipient account
+    ///   2. `[]` RecentBlockhashes sysvar
+    ///   3. `[]` Rent sysvar
+    ///   4. `[SIGNER]` Nonce authority
     ///
     /// The `u64` parameter is the lamports to withdraw, which must leave the
     /// account balance above the rent exempt reserve or at zero.
@@ -136,9 +136,9 @@ pub enum SystemInstruction {
     /// Drive state of Uninitalized nonce account to Initialized, setting the nonce value
     ///
     /// # Account references
-    ///   0. [WRITE] Nonce account
-    ///   1. [] RecentBlockhashes sysvar
-    ///   2. [] Rent sysvar
+    ///   0. `[WRITE]` Nonce account
+    ///   1. `[]` RecentBlockhashes sysvar
+    ///   2. `[]` Rent sysvar
     ///
     /// The `Pubkey` parameter specifies the entity authorized to execute nonce
     /// instruction on the account
@@ -150,8 +150,8 @@ pub enum SystemInstruction {
     /// Change the entity authorized to execute nonce instructions on the account
     ///
     /// # Account references
-    ///   0. [WRITE] Nonce account
-    ///   1. [SIGNER] Nonce authority
+    ///   0. `[WRITE]` Nonce account
+    ///   1. `[SIGNER]` Nonce authority
     ///
     /// The `Pubkey` parameter identifies the entity to authorize
     AuthorizeNonceAccount(Pubkey),
@@ -159,7 +159,7 @@ pub enum SystemInstruction {
     /// Allocate space in a (possibly new) account without funding
     ///
     /// # Account references
-    ///   0. [WRITE, SIGNER] New account
+    ///   0. `[WRITE, SIGNER]` New account
     Allocate {
         /// Number of bytes of memory to allocate
         space: u64,
@@ -169,8 +169,8 @@ pub enum SystemInstruction {
     ///    derived from a base public key and a seed
     ///
     /// # Account references
-    ///   0. [WRITE] Allocated account
-    ///   1. [SIGNER] Base account
+    ///   0. `[WRITE]` Allocated account
+    ///   1. `[SIGNER]` Base account
     AllocateWithSeed {
         /// Base public key
         base: Pubkey,
@@ -188,8 +188,8 @@ pub enum SystemInstruction {
     /// Assign account to a program based on a seed
     ///
     /// # Account references
-    ///   0. [WRITE] Assigned account
-    ///   1. [SIGNER] Base account
+    ///   0. `[WRITE]` Assigned account
+    ///   1. `[SIGNER]` Base account
     AssignWithSeed {
         /// Base public key
         base: Pubkey,
@@ -204,9 +204,9 @@ pub enum SystemInstruction {
     /// Transfer lamports from a derived address
     ///
     /// # Account references
-    ///   0. [WRITE] Funding account
-    ///   1. [SIGNER] Base for funding account
-    ///   2. [WRITE] Recipient account
+    ///   0. `[WRITE]` Funding account
+    ///   1. `[SIGNER]` Base for funding account
+    ///   2. `[WRITE]` Recipient account
     TransferWithSeed {
         /// Amount to transfer
         lamports: u64,

@@ -57,59 +57,59 @@ pub enum VoteInstruction {
     /// Initialize a vote account
     ///
     /// # Account references
-    ///   0. [WRITE] Uninitialized vote account
-    ///   1. [] Rent sysvar
-    ///   2. [] Clock sysvar
-    ///   3. [SIGNER] New validator identity (node_pubkey)
+    ///   0. `[WRITE]` Uninitialized vote account
+    ///   1. `[]` Rent sysvar
+    ///   2. `[]` Clock sysvar
+    ///   3. `[SIGNER]` New validator identity (node_pubkey)
     InitializeAccount(VoteInit),
 
     /// Authorize a key to send votes or issue a withdrawal
     ///
     /// # Account references
-    ///   0. [WRITE] Vote account to be updated with the Pubkey for authorization
-    ///   1. [] Clock sysvar
-    ///   2. [SIGNER] Vote or withdraw authority
+    ///   0. `[WRITE]` Vote account to be updated with the Pubkey for authorization
+    ///   1. `[]` Clock sysvar
+    ///   2. `[SIGNER]` Vote or withdraw authority
     Authorize(Pubkey, VoteAuthorize),
 
     /// A Vote instruction with recent votes
     ///
     /// # Account references
-    ///   0. [WRITE] Vote account to vote with
-    ///   1. [] Slot hashes sysvar
-    ///   2. [] Clock sysvar
-    ///   3. [SIGNER] Vote authority
+    ///   0. `[WRITE]` Vote account to vote with
+    ///   1. `[]` Slot hashes sysvar
+    ///   2. `[]` Clock sysvar
+    ///   3. `[SIGNER]` Vote authority
     Vote(Vote),
 
     /// Withdraw some amount of funds
     ///
     /// # Account references
-    ///   0. [WRITE] Vote account to withdraw from
-    ///   1. [WRITE] Recipient account
-    ///   2. [SIGNER] Withdraw authority
+    ///   0. `[WRITE]` Vote account to withdraw from
+    ///   1. `[WRITE]` Recipient account
+    ///   2. `[SIGNER]` Withdraw authority
     Withdraw(u64),
 
     /// Update the vote account's validator identity (node_pubkey)
     ///
     /// # Account references
-    ///   0. [WRITE] Vote account to be updated with the given authority public key
-    ///   1. [SIGNER] New validator identity (node_pubkey)
-    ///   2. [SIGNER] Withdraw authority
+    ///   0. `[WRITE]` Vote account to be updated with the given authority public key
+    ///   1. `[SIGNER]` New validator identity (node_pubkey)
+    ///   2. `[SIGNER]` Withdraw authority
     UpdateValidatorIdentity,
 
     /// Update the commission for the vote account
     ///
     /// # Account references
-    ///   0. [WRITE] Vote account to be updated
-    ///   1. [SIGNER] Withdraw authority
+    ///   0. `[WRITE]` Vote account to be updated
+    ///   1. `[SIGNER]` Withdraw authority
     UpdateCommission(u8),
 
     /// A Vote instruction with recent votes
     ///
     /// # Account references
-    ///   0. [WRITE] Vote account to vote with
-    ///   1. [] Slot hashes sysvar
-    ///   2. [] Clock sysvar
-    ///   3. [SIGNER] Vote authority
+    ///   0. `[WRITE]` Vote account to vote with
+    ///   1. `[]` Slot hashes sysvar
+    ///   2. `[]` Clock sysvar
+    ///   3. `[SIGNER]` Vote authority
     VoteSwitch(Vote, Hash),
 
     /// Authorize a key to send votes or issue a withdrawal
@@ -118,10 +118,10 @@ pub enum VoteInstruction {
     /// or withdraw authority must also be a signer.
     ///
     /// # Account references
-    ///   0. [WRITE] Vote account to be updated with the Pubkey for authorization
-    ///   1. [] Clock sysvar
-    ///   2. [SIGNER] Vote or withdraw authority
-    ///   3. [SIGNER] New vote or withdraw authority
+    ///   0. `[WRITE]` Vote account to be updated with the Pubkey for authorization
+    ///   1. `[]` Clock sysvar
+    ///   2. `[SIGNER]` Vote or withdraw authority
+    ///   3. `[SIGNER]` New vote or withdraw authority
     AuthorizeChecked(VoteAuthorize),
 }
 
