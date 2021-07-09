@@ -59,6 +59,7 @@ pub mod validator;
 pub mod verified_vote_packets;
 pub mod vote_simulator;
 pub mod vote_stake_tracker;
+pub mod voting_service;
 pub mod window_service;
 
 #[macro_use]
