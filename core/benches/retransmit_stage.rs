@@ -5,9 +5,9 @@ extern crate test;
 
 use log::*;
 use solana_core::retransmit_stage::retransmitter;
+use solana_entry::entry::Entry;
 use solana_gossip::cluster_info::{ClusterInfo, Node};
 use solana_gossip::contact_info::ContactInfo;
-use solana_ledger::entry::Entry;
 use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
 use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
 use solana_ledger::shred::Shredder;

@@ -1,4 +1,6 @@
-use solana_sdk::{hash::Hash, transaction::Transaction};
+#![cfg(feature = "full")]
+
+use crate::{hash::Hash, transaction::Transaction};
 use std::borrow::Cow;
 
 /// Transaction and the hash of its message

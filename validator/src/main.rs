@@ -2620,7 +2620,7 @@ pub fn main() {
         solana_perf::perf_libs::init_cuda();
         enable_recycler_warming();
     }
-    solana_ledger::entry::init_poh();
+    solana_entry::entry::init_poh();
     solana_runtime::snapshot_utils::remove_tmp_snapshot_archives(&snapshot_output_dir);
 
     let identity_keypair = Arc::new(identity_keypair);

@@ -9,10 +9,9 @@ use solana_clap_utils::{
     input_parsers::{cluster_type_of, pubkey_of, pubkeys_of, unix_timestamp_from_rfc3339_datetime},
     input_validators::{is_pubkey_or_keypair, is_rfc3339_datetime, is_slot, is_valid_percentage},
 };
+use solana_entry::poh::compute_hashes_per_tick;
 use solana_genesis::{genesis_accounts::add_genesis_accounts, Base64Account};
-use solana_ledger::{
-    blockstore::create_new_ledger, blockstore_db::AccessType, poh::compute_hashes_per_tick,
-};
+use solana_ledger::{blockstore::create_new_ledger, blockstore_db::AccessType};
 use solana_runtime::hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE;
 use solana_sdk::{
     account::{Account, AccountSharedData, ReadableAccount, WritableAccount},

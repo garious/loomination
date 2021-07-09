@@ -1,5 +1,5 @@
 use crate::bank::Bank;
-use crate::hashed_transaction::HashedTransaction;
+use solana_sdk::hashed_transaction::HashedTransaction;
 use solana_sdk::transaction::{Result, Transaction};
 use std::borrow::Cow;
 

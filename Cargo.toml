@@ -16,6 +16,7 @@ members = [
     "core",
     "dos",
     "download-utils",
+    "entry",
     "faucet",
     "frozen-abi",
     "perf",

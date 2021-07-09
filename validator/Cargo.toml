@@ -33,6 +33,7 @@ solana-cli-config = { path = "../cli-config", version = "=1.8.0" }
 solana-client = { path = "../client", version = "=1.8.0" }
 solana-core = { path = "../core", version = "=1.8.0" }
 solana-download-utils = { path = "../download-utils", version = "=1.8.0" }
+solana-entry = { path = "../entry", version = "=1.8.0" }
 solana-faucet = { path = "../faucet", version = "=1.8.0" }
 solana-genesis-utils = { path = "../genesis-utils", version = "=1.8.0" }
 solana-gossip = { path = "../gossip", version = "=1.8.0" }

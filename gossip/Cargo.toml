@@ -28,6 +28,7 @@ serde_bytes = "0.11"
 serde_derive = "1.0.103"
 solana-clap-utils = { path = "../clap-utils", version = "=1.8.0" }
 solana-client = { path = "../client", version = "=1.8.0" }
+solana-entry = { path = "../entry", version = "=1.8.0" }
 solana-frozen-abi = { path = "../frozen-abi", version = "=1.8.0" }
 solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.8.0" }
 solana-ledger = { path = "../ledger", version = "=1.8.0" }

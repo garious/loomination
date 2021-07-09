@@ -4,7 +4,7 @@ use {
     crate::poh_recorder::{PohRecorder, Record},
     crossbeam_channel::Receiver,
     log::*,
-    solana_ledger::poh::Poh,
+    solana_entry::poh::Poh,
     solana_measure::measure::Measure,
     solana_sdk::poh_config::PohConfig,
     std::{

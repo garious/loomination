@@ -3294,7 +3294,6 @@ name = "solana-measure"
 version = "1.8.0"
 dependencies = [
  "log",
- "solana-metrics",
  "solana-sdk",
 ]
 

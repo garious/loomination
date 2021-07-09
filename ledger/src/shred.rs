@@ -49,11 +49,7 @@
 //! So, given a) - c), we must restrict data shred's payload length such that the entire coding
 //! payload can fit into one coding shred / packet.
 
-use crate::{
-    blockstore::MAX_DATA_SHREDS_PER_SLOT,
-    entry::{create_ticks, Entry},
-    erasure::Session,
-};
+use crate::{blockstore::MAX_DATA_SHREDS_PER_SLOT, erasure::Session};
 use bincode::config::Options;
 use core::cell::RefCell;
 use rayon::{
@@ -62,6 +58,7 @@ use rayon::{
     ThreadPool,
 };
 use serde::{Deserialize, Serialize};
+use solana_entry::entry::{create_ticks, Entry};
 use solana_measure::measure::Measure;
 use solana_perf::packet::{limited_deserialize, Packet};
 use solana_rayon_threadlimit::get_thread_count;

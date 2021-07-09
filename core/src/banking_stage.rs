@@ -6,8 +6,9 @@ use crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError};
 use itertools::Itertools;
 use lru::LruCache;
 use retain_mut::RetainMut;
+use solana_entry::entry::hash_transactions;
 use solana_gossip::cluster_info::ClusterInfo;
-use solana_ledger::{blockstore_processor::TransactionStatusSender, entry::hash_transactions};
+use solana_ledger::blockstore_processor::TransactionStatusSender;
 use solana_measure::measure::Measure;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_info};
 use solana_perf::{
@@ -23,10 +24,10 @@ use solana_runtime::{
         TransactionExecutionResult,
     },
     bank_utils,
-    hashed_transaction::HashedTransaction,
     transaction_batch::TransactionBatch,
     vote_sender_types::ReplayVoteSender,
 };
+use solana_sdk::hashed_transaction::HashedTransaction;
 use solana_sdk::{
     clock::{
         Slot, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE, MAX_TRANSACTION_FORWARDING_DELAY,
@@ -1570,10 +1571,10 @@ mod tests {
     use crate::cost_model::CostModel;
     use crossbeam_channel::unbounded;
     use itertools::Itertools;
+    use solana_entry::entry::{next_entry, Entry, EntrySlice};
     use solana_gossip::cluster_info::Node;
     use solana_ledger::{
         blockstore::{entries_to_test_shreds, Blockstore},
-        entry::{next_entry, Entry, EntrySlice},
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         get_tmp_ledger_path,
         leader_schedule_cache::LeaderScheduleCache,

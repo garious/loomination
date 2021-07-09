@@ -384,11 +384,9 @@ impl Blockstore {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::{
-        blockstore::tests::make_slot_entries_with_transactions, entry::next_entry_mut,
-        get_tmp_ledger_path,
-    };
+    use crate::{blockstore::tests::make_slot_entries_with_transactions, get_tmp_ledger_path};
     use bincode::serialize;
+    use solana_entry::entry::next_entry_mut;
     use solana_sdk::{
         hash::{hash, Hash},
         message::Message,

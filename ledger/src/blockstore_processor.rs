@@ -1,10 +1,6 @@
 use crate::{
-    block_error::BlockError,
-    blockstore::Blockstore,
-    blockstore_db::BlockstoreError,
-    blockstore_meta::SlotMeta,
-    entry::{create_ticks, Entry, EntrySlice, EntryType, EntryVerificationStatus, VerifyRecyclers},
-    leader_schedule_cache::LeaderScheduleCache,
+    block_error::BlockError, blockstore::Blockstore, blockstore_db::BlockstoreError,
+    blockstore_meta::SlotMeta, leader_schedule_cache::LeaderScheduleCache,
 };
 use chrono_humanize::{Accuracy, HumanTime, Tense};
 use crossbeam_channel::Sender;
@@ -12,6 +8,9 @@ use itertools::Itertools;
 use log::*;
 use rand::{seq::SliceRandom, thread_rng};
 use rayon::{prelude::*, ThreadPool};
+use solana_entry::entry::{
+    create_ticks, Entry, EntrySlice, EntryType, EntryVerificationStatus, VerifyRecyclers,
+};
 use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_error, inc_new_counter_debug};
 use solana_rayon_threadlimit::get_thread_count;
@@ -1304,15 +1303,13 @@ pub fn fill_blockstore_slot_with_ticks(
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::{
-        entry::{create_ticks, next_entry, next_entry_mut},
-        genesis_utils::{
-            create_genesis_config, create_genesis_config_with_leader, GenesisConfigInfo,
-        },
+    use crate::genesis_utils::{
+        create_genesis_config, create_genesis_config_with_leader, GenesisConfigInfo,
     };
     use crossbeam_channel::unbounded;
     use matches::assert_matches;
     use rand::{thread_rng, Rng};
+    use solana_entry::entry::{create_ticks, next_entry, next_entry_mut};
     use solana_runtime::genesis_utils::{
         self, create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
     };

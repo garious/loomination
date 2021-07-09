@@ -1,4 +1,4 @@
-use solana_ledger::entry;
+use solana_entry::entry;
 use solana_ledger::{
     blockstore::{self, Blockstore},
     get_tmp_ledger_path,

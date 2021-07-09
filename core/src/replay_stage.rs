@@ -23,12 +23,12 @@ use crate::{
     window_service::DuplicateSlotReceiver,
 };
 use solana_client::rpc_response::SlotUpdate;
+use solana_entry::entry::VerifyRecyclers;
 use solana_gossip::cluster_info::ClusterInfo;
 use solana_ledger::{
     block_error::BlockError,
     blockstore::Blockstore,
     blockstore_processor::{self, BlockstoreProcessorError, TransactionStatusSender},
-    entry::VerifyRecyclers,
     leader_schedule_cache::LeaderScheduleCache,
 };
 use solana_measure::measure::Measure;
@@ -2674,12 +2674,12 @@ mod tests {
         vote_simulator::{self, VoteSimulator},
     };
     use crossbeam_channel::unbounded;
+    use solana_entry::entry::{self, Entry};
     use solana_gossip::{cluster_info::Node, crds::Cursor};
     use solana_ledger::{
         blockstore::make_slot_entries,
         blockstore::{entries_to_test_shreds, BlockstoreError},
         create_new_tmp_ledger,
-        entry::{self, Entry},
         genesis_utils::{create_genesis_config, create_genesis_config_with_leader},
         get_tmp_ledger_path,
         shred::{

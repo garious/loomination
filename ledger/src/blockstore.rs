@@ -8,7 +8,6 @@ use crate::{
         IteratorMode, LedgerColumn, Result, WriteBatch,
     },
     blockstore_meta::*,
-    entry::{create_ticks, Entry},
     erasure::ErasureConfig,
     leader_schedule_cache::LeaderScheduleCache,
     next_slots_iterator::NextSlotsIterator,
@@ -22,6 +21,7 @@ use rayon::{
     ThreadPool,
 };
 use rocksdb::DBRawIterator;
+use solana_entry::entry::{create_ticks, Entry};
 use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_debug, datapoint_error};
 use solana_rayon_threadlimit::get_thread_count;
@@ -3930,7 +3930,6 @@ fn adjust_ulimit_nofile(enforce_ulimit_nofile: bool) -> Result<()> {
 pub mod tests {
     use super::*;
     use crate::{
-        entry::{next_entry, next_entry_mut},
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         leader_schedule::{FixedSchedule, LeaderSchedule},
         shred::{max_ticks_per_n_shreds, DataShredHeader},
@@ -3940,6 +3939,7 @@ pub mod tests {
     use itertools::Itertools;
     use rand::{seq::SliceRandom, thread_rng};
     use solana_account_decoder::parse_token::UiTokenAmount;
+    use solana_entry::entry::{next_entry, next_entry_mut};
     use solana_runtime::bank::{Bank, RewardType};
     use solana_sdk::{
         hash::{self, hash, Hash},

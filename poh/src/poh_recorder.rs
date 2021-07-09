@@ -17,9 +17,8 @@ use {
         unbounded, Receiver as CrossbeamReceiver, RecvTimeoutError, Sender as CrossbeamSender,
     },
     log::*,
-    solana_ledger::{
-        blockstore::Blockstore, entry::Entry, leader_schedule_cache::LeaderScheduleCache, poh::Poh,
-    },
+    solana_entry::{entry::Entry, poh::Poh},
+    solana_ledger::{blockstore::Blockstore, leader_schedule_cache::LeaderScheduleCache},
     solana_runtime::bank::Bank,
     solana_sdk::{
         clock::NUM_CONSECUTIVE_LEADER_SLOTS, hash::Hash, poh_config::PohConfig, pubkey::Pubkey,
