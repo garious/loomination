@@ -15,7 +15,6 @@ use {
         duplicate_shred::{self, DuplicateShredIndex, LeaderScheduleFn, MAX_DUPLICATE_SHREDS},
         ping_pong::PingCache,
     },
-    itertools::Itertools,
     rayon::ThreadPool,
     solana_ledger::shred::Shred,
     solana_sdk::{
@@ -48,21 +47,16 @@ impl CrdsGossip {
         values: Vec<CrdsValue>,
         now: u64,
     ) -> HashSet<Pubkey> {
-        values
+        self.push
+            .process_push_message(&mut self.crds, from, values, now)
             .into_iter()
-            .filter_map(|val| {
-                let origin = val.pubkey();
-                self.push
-                    .process_push_message(&mut self.crds, from, val, now)
-                    .ok()?;
-                Some(origin)
-            })
+            .filter_map(Result::ok)
             .collect()
     }
 
     /// remove redundant paths in the network
     pub fn prune_received_cache<I>(
-        &mut self,
+        &self,
         self_pubkey: &Pubkey,
         origins: I, // Unique pubkeys of crds values' owners.
         stakes: &HashMap<Pubkey, u64>,
@@ -70,15 +64,8 @@ impl CrdsGossip {
     where
         I: IntoIterator<Item = Pubkey>,
     {
-        origins
-            .into_iter()
-            .flat_map(|origin| {
-                self.push
-                    .prune_received_cache(self_pubkey, &origin, stakes)
-                    .into_iter()
-                    .zip(std::iter::repeat(origin))
-            })
-            .into_group_map()
+        self.push
+            .prune_received_cache_many(self_pubkey, origins, stakes)
     }
 
     pub fn new_push_messages(
@@ -181,7 +168,7 @@ impl CrdsGossip {
     /// refresh the push active set
     /// * ratio - number of actives to rotate
     pub fn refresh_push_active_set(
-        &mut self,
+        &self,
         self_pubkey: &Pubkey,
         self_shred_version: u16,
         stakes: &HashMap<Pubkey, u64>,
