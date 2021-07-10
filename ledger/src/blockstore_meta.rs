@@ -200,8 +200,9 @@ impl ErasureMeta {
     pub fn status(&self, index: &Index) -> ErasureMetaStatus {
         use ErasureMetaStatus::*;
 
-        let coding_indices = self.set_index..self.set_index + self.config.num_coding() as u64;
-        let num_coding = index.coding().present_in_bounds(coding_indices);
+        let num_coding = index
+            .coding()
+            .present_in_bounds(self.set_index..self.set_index + self.config.num_coding() as u64);
         let num_data = index
             .data()
             .present_in_bounds(self.set_index..self.set_index + self.config.num_data() as u64);
@@ -263,6 +264,30 @@ mod test {
     use super::*;
     use rand::{seq::SliceRandom, thread_rng};
     use std::iter::repeat;
+
+    #[test]
+    fn test_shred_index() {
+        let mut index = ShredIndex::default();
+        assert!(!index.is_present(new_idx));
+        assert_eq!(index.num_shreds(), 0);
+
+        let new_idx = 2;
+        index.set_present(new_idx, true);
+        assert!(index.is_present(new_idx));
+        assert_eq!(index.num_shreds(), 1);
+
+        index.set_present(new_idx, false);
+        assert!(!index.is_present(new_idx));
+        assert_eq!(index.num_shreds(), 0);
+
+        // Check boundary conditions; start is inclusive, end is inclusive
+        index.set_many_present((5..10 as u64).zip(repeat(true)));
+        assert_eq!(index.present_in_bounds(0..5), 0);
+        assert_eq!(index.present_in_bounds(2..7), 2);
+        assert_eq!(index.present_in_bounds(5..10), 5);
+        assert_eq!(index.present_in_bounds(7..12), 3);
+        assert_eq!(index.present_in_bounds(10..15), 0);
+    }
 
     #[test]
     fn test_erasure_meta_status() {
