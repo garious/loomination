@@ -1,7 +1,9 @@
-//! Crds Gossip Pull overlay
+//! Crds Gossip Pull overlay.
+//!
 //! This module implements the anti-entropy protocol for the network.
 //!
 //! The basic strategy is as follows:
+//!
 //! 1. Construct a bloom filter of the local data set
 //! 2. Randomly ask a node on the network for data that is not contained in the bloom filter.
 //!
@@ -182,7 +184,7 @@ pub struct ProcessPullStats {
 }
 
 pub struct CrdsGossipPull {
-    /// timestamp of last request
+    /// Timestamp of last request
     pub(crate) pull_request_time: LruCache<Pubkey, u64>,
     // Hash value and record time (ms) of the pull responses which failed to be
     // inserted in crds table; Preserved to stop the sender to send back the
@@ -206,7 +208,7 @@ impl Default for CrdsGossipPull {
     }
 }
 impl CrdsGossipPull {
-    /// generate a random request
+    /// Generate a random request
     #[allow(clippy::too_many_arguments)]
     pub fn new_pull_request(
         &self,
@@ -311,7 +313,8 @@ impl CrdsGossipPull {
             .collect()
     }
 
-    /// time when a request to `from` was initiated
+    /// Time when a request to `from` was initiated.
+    ///
     /// This is used for weighted random selection during `new_pull_request`
     /// It's important to use the local nodes request creation time as the weight
     /// instead of the response received time otherwise failed nodes will increase their weight.
@@ -319,7 +322,7 @@ impl CrdsGossipPull {
         self.pull_request_time.put(from, now);
     }
 
-    /// process a pull request
+    /// Process a pull request.
     pub fn process_pull_requests<I>(&mut self, crds: &mut Crds, callers: I, now: u64)
     where
         I: IntoIterator<Item = CrdsValue>,
@@ -331,7 +334,7 @@ impl CrdsGossipPull {
         }
     }
 
-    /// Create gossip responses to pull requests
+    /// Create gossip responses to pull requests.
     pub fn generate_pull_responses(
         &self,
         crds: &Crds,
@@ -393,7 +396,7 @@ impl CrdsGossipPull {
         (active_values, expired_values, failed_inserts)
     }
 
-    /// process a vec of pull responses
+    /// Process a vec of pull responses.
     pub fn process_pull_responses(
         &mut self,
         crds: &mut Crds,
@@ -470,7 +473,7 @@ impl CrdsGossipPull {
         filters.into()
     }
 
-    /// filter values that fail the bloom filter up to max_bytes
+    /// Filter values that fail the bloom filter up to `max_bytes`.
     fn filter_crds_values(
         &self,
         crds: &Crds,

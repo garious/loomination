@@ -1,5 +1,8 @@
-//! Persistent storage for accounts. For more information, see:
-//! https://docs.solana.com/implemented-proposals/persistent-account-storage
+//! Persistent storage for accounts.
+//!
+//! For more information, see:
+//!
+//! <https://docs.solana.com/implemented-proposals/persistent-account-storage>
 
 use log::*;
 use memmap2::MmapMut;

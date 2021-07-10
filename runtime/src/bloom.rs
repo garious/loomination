@@ -67,10 +67,12 @@ impl<T: BloomHashIndex> Bloom<T> {
             _phantom: PhantomData::default(),
         }
     }
-    /// create filter optimal for num size given the `FALSE_RATE`
-    /// the keys are randomized for picking data out of a collision resistant hash of size
-    /// `keysize` bytes
-    /// https://hur.st/bloomfilter/
+    /// Create filter optimal for num size given the `FALSE_RATE`.
+    ///
+    /// The keys are randomized for picking data out of a collision resistant hash of size
+    /// `keysize` bytes.
+    ///
+    /// See <https://hur.st/bloomfilter/>.
     pub fn random(num_items: usize, false_rate: f64, max_bits: usize) -> Self {
         let m = Self::num_bits(num_items as f64, false_rate);
         let num_bits = cmp::max(1, cmp::min(m as usize, max_bits));
