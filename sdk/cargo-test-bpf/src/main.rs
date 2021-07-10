@@ -4,6 +4,8 @@ use clap::{
 use std::{
     env,
     ffi::OsStr,
+    fs::File,
+    io::{prelude::*, BufWriter},
     path::{Path, PathBuf},
     process::exit,
     process::Command,
@@ -49,7 +51,7 @@ where
     S: AsRef<OsStr>,
 {
     let args = args.into_iter().collect::<Vec<_>>();
-    print!("Running: {}", program.display());
+    print!("CARGO-TEST-BPF Running: {}", program.display());
     for arg in args.iter() {
         print!(" {}", arg.as_ref().to_str().unwrap_or("?"));
     }
@@ -65,6 +67,19 @@ where
 
     let exit_status = child.wait().expect("failed to wait on child");
     if !exit_status.success() {
+        eprintln!("CARGO-TEST-BPF exited on command execution failure.");
+        let rerun = File::create("rerun-script.sh").unwrap();
+        let mut out = BufWriter::new(rerun);
+        for (key, value) in env::vars() {
+            writeln!(out, "{}=\"{}\" \\", key, value).unwrap();
+        }
+        write!(out, "{}", program.display()).unwrap();
+        for arg in args.iter() {
+            write!(out, " {}", arg.as_ref().to_str().unwrap_or("?")).unwrap();
+        }
+        writeln!(out).unwrap();
+        out.flush().unwrap();
+        eprintln!("To rerun the failed command for debugging use rerun-script.sh");
         exit(1);
     }
 }
