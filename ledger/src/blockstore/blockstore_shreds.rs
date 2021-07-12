@@ -2,8 +2,9 @@
 
 use super::*;
 use crate::shred::SHRED_PAYLOAD_SIZE;
+use std::collections::BTreeMap;
 use std::time::{SystemTime, UNIX_EPOCH};
-use std::{fs, io::Read, io::Seek, io::SeekFrom, io::Write};
+use std::{cmp, fs, io::Read, io::Seek, io::SeekFrom, io::Write};
 
 pub const SHRED_DIRECTORY: &str = "shreds";
 pub const SHRED_WAL_DIRECTORY: &str = "log";
@@ -28,7 +29,9 @@ pub struct ShredWAL {
     // The number of shreds written to current WAL file
     cur_shreds: usize,
     // ID to current WAL file
-    id: Option<u64>,
+    cur_id: Option<u64>,
+    // Map of WAL ID to max slot contained in WAL
+    max_slots: BTreeMap<u64, u64>,
 }
 
 impl ShredWAL {
@@ -39,13 +42,14 @@ impl ShredWAL {
             wal_path,
             max_shreds,
             cur_shreds: 0,
-            id: None,
+            cur_id: None,
+            max_slots: BTreeMap::new(),
         };
         Ok(wal)
     }
 
     // Recover shreds from log files at specified path
-    pub fn recover(&self) -> Result<Vec<Shred>> {
+    pub fn recover(&mut self) -> Result<Vec<Shred>> {
         assert!(&self.wal_path.is_dir());
         let mut buffers = vec![];
         let dir = fs::read_dir(&self.wal_path)?;
@@ -55,16 +59,21 @@ impl ShredWAL {
             // TODO: better error handling below line? We can probably fail
             // if there is some unknown file in this directory
             let id: u64 = log.file_name().to_str().unwrap().parse().unwrap();
+            let mut max_slot = 0;
 
             let path = self.wal_path.join(id.to_string());
             let mut file = fs::File::open(path)?;
             loop {
                 let mut buffer = vec![0; SHRED_PAYLOAD_SIZE];
                 match file.read_exact(&mut buffer).ok() {
-                    Some(_) => buffers.push(buffer),
+                    Some(_) => {
+                        max_slot = cmp::max(max_slot, Shred::get_slot_from_data(&buffer).unwrap());
+                        buffers.push(buffer);
+                    }
                     None => break,
                 };
             }
+            self.max_slots.insert(id, max_slot);
         }
 
         let shreds: ShredResult<Vec<_>> = buffers
@@ -83,24 +92,28 @@ impl ShredWAL {
     // Write the supplied shred payloads into the log
     pub fn write(&mut self, shreds: &HashMap<(u64, u64), Shred>) -> Result<()> {
         // Check if write would push WAL size over limit
-        let mut file = if self.id.is_none() || self.cur_shreds + shreds.len() > self.max_shreds {
-            self.id = Some(
+        let mut file = if self.cur_id.is_none() || self.cur_shreds + shreds.len() > self.max_shreds
+        {
+            self.cur_id = Some(
                 SystemTime::now()
                     .duration_since(UNIX_EPOCH)
                     .unwrap()
                     .as_secs(),
             );
             self.cur_shreds = 0;
-            let path = Path::new(&self.wal_path).join(self.id.unwrap().to_string());
-            fs::File::create(path)
+            self.max_slots.insert(self.cur_id.unwrap(), 0);
+            fs::File::create(self.id_path(self.cur_id.unwrap()))
         } else {
-            let path = Path::new(&self.wal_path).join(self.id.unwrap().to_string());
-            fs::OpenOptions::new().append(true).open(path)
+            fs::OpenOptions::new()
+                .append(true)
+                .open(self.id_path(self.cur_id.unwrap()))
         }?;
 
+        let mut insert_max_slot = 0;
         let result: Result<Vec<_>> = shreds
             .iter()
             .map(|((slot, index), shred)| {
+                insert_max_slot = cmp::max(insert_max_slot, *slot);
                 file.write_all(&shred.payload).map_err(|err| {
                     // TODO: slot / index possibly not relevant, also should we panic?
                     BlockstoreError::Io(IoError::new(
@@ -113,10 +126,45 @@ impl ShredWAL {
                 })
             })
             .collect();
-        // Check that all of the individual writes succeeded
+        // Check that all of the individual writes succeeded and then update state
         let _result = result?;
         self.cur_shreds += shreds.len();
+        let cur_max_slot = *self.max_slots.get(&self.cur_id.unwrap()).unwrap();
+        self.max_slots.insert(
+            self.cur_id.unwrap(),
+            cmp::max(cur_max_slot, insert_max_slot),
+        );
         Ok(())
+    }
+
+    // Path to WAL file with id
+    fn id_path(&self, id: u64) -> PathBuf {
+        self.wal_path.join(id.to_string())
+    }
+
+    // Purge log files where the newest shreds in the log are
+    // older than the max_purge_slot
+    pub fn purge(&mut self, max_purge_slot: Slot) {
+        let mut ids_to_purge = vec![];
+        for (id, _) in self
+            .max_slots
+            .iter()
+            .filter(|(_, max_slot)| **max_slot < max_purge_slot)
+        {
+            match self.cur_id {
+                // Do not delete the current log file
+                Some(cur_id) if *id != cur_id => {
+                    // Collect which files are getting purged
+                    ids_to_purge.push(cur_id);
+                    let _ = fs::remove_file(self.id_path(*id));
+                }
+                _ => {}
+            }
+        }
+
+        for id in ids_to_purge.iter() {
+            self.max_slots.remove(id);
+        }
     }
 }
 
@@ -250,7 +298,7 @@ impl Blockstore {
 
     /// Recover shreds from WAL(s) and re-establish consistent state in the blockstore
     pub(crate) fn recover(&self) -> Result<()> {
-        let shred_wal = self.shred_wal.lock().unwrap();
+        let mut shred_wal = self.shred_wal.lock().unwrap();
         let mut rec_shreds = shred_wal.recover()?;
         let mut full_insert_shreds = vec![];
         // There several possible scenarios for what we need to do with the shred

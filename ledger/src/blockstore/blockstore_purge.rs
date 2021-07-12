@@ -217,6 +217,7 @@ impl Blockstore {
         for slot in from_slot..to_slot {
             self.purge_data_shreds(slot);
         }
+        self.shred_wal.lock().unwrap().purge(to_slot);
 
         // only drop w_active_transaction_status_index after we do db.write(write_batch);
         // otherwise, readers might be confused with inconsistent state between
