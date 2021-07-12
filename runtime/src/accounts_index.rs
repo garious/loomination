@@ -115,14 +115,6 @@ impl<T: Clone> AccountMapEntry<T> {
     pub fn ref_count(&self) -> u64 {
         self.ref_count.load(Ordering::Relaxed)
     }
-
-    // this isn't intended to be called in general situations
-    fn clone_for_iterator(&self) -> Self {
-        Self {
-            ref_count: AtomicU64::new(self.ref_count()),
-            slot_list: self.slot_list.clone(),
-        }
-    }
 }
 
 pub enum AccountIndexGetResult<'a, T: 'static> {
@@ -211,7 +203,7 @@ impl<'a, 'b: 'a, T: 'static + Clone + IsCached> WriteAccountMapEntry<'a, 'b, T> 
         let result = WriteAccountMapEntryBuilder {
             lock,
             pubkey,
-            owned_entry_builder: |lock, pubkey| match lock.entry(*pubkey) {
+            owned_entry_builder: |lock, pubkey| match lock.entry(**pubkey) {
                 Entry::Occupied(occupied) => (Some(occupied), None),
                 Entry::Vacant(vacant) => (None, Some(vacant)),
             },
@@ -655,34 +647,37 @@ impl<'a, T> AccountsIndexIterator<'a, T> {
 }
 
 impl<'a, T: 'static + Clone> Iterator for AccountsIndexIterator<'a, T> {
-    type Item = Vec<(Pubkey, AccountMapEntry<T>)>;
+    type Item = Vec<Pubkey>;
     fn next(&mut self) -> Option<Self::Item> {
         if self.is_finished {
             return None;
         }
 
-        let chunk: Vec<(Pubkey, AccountMapEntry<T>)> = self
-            .account_maps
-            .iter()
-            .map(|i| {
-                i.read()
-                    .unwrap()
-                    .range((self.start_bound, self.end_bound))
-                    .map(|(pubkey, account_map_entry)| {
-                        (*pubkey, account_map_entry.clone_for_iterator())
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .flatten()
-            .take(ITER_BATCH_SIZE)
-            .collect();
+        // start in bin where 'start_bound' would exist
+        let start_bin = match &self.start_bound {
+            Bound::Included(start_bound) => get_bin_pubkey(start_bound),
+            Bound::Excluded(start_bound) => get_bin_pubkey(start_bound),
+            Bound::Unbounded => 0,
+        };
+        let mut chunk: Vec<Pubkey> = Vec::with_capacity(ITER_BATCH_SIZE);
+        'outer: for i in self.account_maps.iter().skip(start_bin) {
+            for (pubkey, _account_map_entry) in
+                i.read().unwrap().range((self.start_bound, self.end_bound))
+            {
+                if chunk.len() >= ITER_BATCH_SIZE {
+                    break 'outer;
+                }
+                let item = *pubkey;
+                chunk.push(item);
+            }
+        }
 
         if chunk.is_empty() {
             self.is_finished = true;
             return None;
         }
 
-        self.start_bound = Excluded(chunk.last().unwrap().0);
+        self.start_bound = Excluded(*chunk.last().unwrap());
         Some(chunk)
     }
 }
@@ -1020,7 +1015,6 @@ impl<T: 'static + Clone + IsCached + ZeroLamport + std::marker::Sync + std::mark
         // instead of scanning the entire range
         let mut total_elapsed_timer = Measure::start("total");
         let mut num_keys_iterated = 0;
-        let mut latest_slot_elapsed = 0;
         let mut load_account_elapsed = 0;
         let mut read_lock_elapsed = 0;
         let mut iterator_elapsed = 0;
@@ -1028,18 +1022,17 @@ impl<T: 'static + Clone + IsCached + ZeroLamport + std::marker::Sync + std::mark
         for pubkey_list in self.iter(range) {
             iterator_timer.stop();
             iterator_elapsed += iterator_timer.as_us();
-            for (pubkey, list) in pubkey_list {
+            for pubkey in pubkey_list {
                 num_keys_iterated += 1;
                 let mut read_lock_timer = Measure::start("read_lock");
-                let list_r = &list.slot_list;
+                let list_r = self.get(&pubkey, Some(ancestors), max_root);
                 read_lock_timer.stop();
                 read_lock_elapsed += read_lock_timer.as_us();
-                let mut latest_slot_timer = Measure::start("latest_slot");
-                if let Some(index) = self.latest_slot(Some(ancestors), list_r, max_root) {
-                    latest_slot_timer.stop();
-                    latest_slot_elapsed += latest_slot_timer.as_us();
+                if let AccountIndexGetResult::Found(locked_entry, index) = list_r {
+                    let slot_list = locked_entry.slot_list();
                     let mut load_account_timer = Measure::start("load_account");
-                    func(&pubkey, (&list_r[index].1, list_r[index].0));
+                    let list_item = &slot_list[index];
+                    func(&pubkey, (&list_item.1, list_item.0));
                     load_account_timer.stop();
                     load_account_elapsed += load_account_timer.as_us();
                 }
@@ -1052,7 +1045,6 @@ impl<T: 'static + Clone + IsCached + ZeroLamport + std::marker::Sync + std::mark
             datapoint_info!(
                 metric_name,
                 ("total_elapsed", total_elapsed_timer.as_us(), i64),
-                ("latest_slot_elapsed", latest_slot_elapsed, i64),
                 ("read_lock_elapsed", read_lock_elapsed, i64),
                 ("load_account_elapsed", load_account_elapsed, i64),
                 ("iterator_elapsed", iterator_elapsed, i64),
@@ -1308,7 +1300,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport + std::marker::Sync + std::mark
                         });
                         slot_list.is_empty()
                     })
-                    .unwrap_or_default() // ???
+                    .unwrap() // will always be Some because we checked for is_occupied above
             } else {
                 true
             }
