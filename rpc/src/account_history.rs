@@ -18,11 +18,11 @@ use {
 pub type AccountHistory = BTreeMap<Slot, HashMap<Pubkey, Account>>;
 pub type AccountKeys = HashSet<Pubkey>;
 
-pub struct AccountHistoryService {
+pub struct RpcAccountHistoryService {
     thread_hdl: JoinHandle<()>,
 }
 
-impl AccountHistoryService {
+impl RpcAccountHistoryService {
     pub fn new(
         num_slots: usize,
         account_keys: Arc<RwLock<AccountKeys>>,

@@ -386,6 +386,7 @@ pub fn process_blockstore(
     account_paths: Vec<PathBuf>,
     opts: ProcessOptions,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
+    rpc_account_history_sender: Option<&RpcAccountHistorySender>,
 ) -> BlockstoreProcessorResult {
     if let Some(num_threads) = opts.override_num_threads {
         PAR_THREAD_POOL.with(|pool| {
@@ -417,6 +418,7 @@ pub fn process_blockstore(
         &opts,
         &recyclers,
         cache_block_meta_sender,
+        rpc_account_history_sender,
     );
     do_process_blockstore_from_root(
         blockstore,
@@ -425,6 +427,7 @@ pub fn process_blockstore(
         &recyclers,
         None,
         cache_block_meta_sender,
+        rpc_account_history_sender,
         BankFromArchiveTimings::default(),
     )
 }
@@ -437,6 +440,7 @@ pub(crate) fn process_blockstore_from_root(
     recyclers: &VerifyRecyclers,
     transaction_status_sender: Option<&TransactionStatusSender>,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
+    rpc_account_history_sender: Option<&RpcAccountHistorySender>,
     timings: BankFromArchiveTimings,
 ) -> BlockstoreProcessorResult {
     do_process_blockstore_from_root(
@@ -446,6 +450,7 @@ pub(crate) fn process_blockstore_from_root(
         recyclers,
         transaction_status_sender,
         cache_block_meta_sender,
+        rpc_account_history_sender,
         timings,
     )
 }
@@ -457,6 +462,7 @@ fn do_process_blockstore_from_root(
     recyclers: &VerifyRecyclers,
     transaction_status_sender: Option<&TransactionStatusSender>,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
+    rpc_account_history_sender: Option<&RpcAccountHistorySender>,
     timings: BankFromArchiveTimings,
 ) -> BlockstoreProcessorResult {
     info!("processing ledger from slot {}...", bank.slot());
@@ -519,6 +525,7 @@ fn do_process_blockstore_from_root(
                 recyclers,
                 transaction_status_sender,
                 cache_block_meta_sender,
+                rpc_account_history_sender,
                 &mut timing,
             )?;
             initial_forks.sort_by_key(|bank| bank.slot());
@@ -847,6 +854,7 @@ fn process_bank_0(
     opts: &ProcessOptions,
     recyclers: &VerifyRecyclers,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
+    rpc_account_history_sender: Option<&RpcAccountHistorySender>,
 ) {
     assert_eq!(bank0.slot(), 0);
     let mut progress = ConfirmationProgress::new(bank0.last_blockhash());
@@ -863,6 +871,7 @@ fn process_bank_0(
     .expect("processing for bank 0 must succeed");
     bank0.freeze();
     cache_block_meta(bank0, cache_block_meta_sender);
+    cache_rpc_account_history(bank0, rpc_account_history_sender);
 }
 
 // Given a bank, add its children to the pending slots queue if those children slots are
@@ -931,6 +940,7 @@ fn load_frozen_forks(
     recyclers: &VerifyRecyclers,
     transaction_status_sender: Option<&TransactionStatusSender>,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
+    rpc_account_history_sender: Option<&RpcAccountHistorySender>,
     timing: &mut ExecuteTimings,
 ) -> result::Result<Vec<Arc<Bank>>, BlockstoreProcessorError> {
     let mut initial_forks = HashMap::new();
@@ -986,6 +996,7 @@ fn load_frozen_forks(
                 &mut progress,
                 transaction_status_sender,
                 cache_block_meta_sender,
+                rpc_account_history_sender,
                 None,
                 timing,
             )
@@ -1160,6 +1171,7 @@ fn process_single_slot(
     progress: &mut ConfirmationProgress,
     transaction_status_sender: Option<&TransactionStatusSender>,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
+    rpc_account_history_sender: Option<&RpcAccountHistorySender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     timing: &mut ExecuteTimings,
 ) -> result::Result<(), BlockstoreProcessorError> {
@@ -1180,6 +1192,7 @@ fn process_single_slot(
 
     bank.freeze(); // all banks handled by this routine are created from complete slots
     cache_block_meta(bank, cache_block_meta_sender);
+    cache_rpc_account_history(bank, rpc_account_history_sender);
 
     Ok(())
 }
@@ -1264,6 +1277,16 @@ pub fn cache_block_meta(bank: &Arc<Bank>, cache_block_meta_sender: Option<&Cache
         cache_block_meta_sender
             .send(bank.clone())
             .unwrap_or_else(|err| warn!("cache_block_meta_sender failed: {:?}", err));
+    }
+}
+
+pub type RpcAccountHistorySender = Sender<Arc<Bank>>;
+
+pub fn cache_rpc_account_history(bank: &Arc<Bank>, rpc_account_history_sender: Option<&RpcAccountHistorySender>) {
+    if let Some(rpc_account_history_sender) = rpc_account_history_sender {
+        rpc_account_history_sender
+            .send(bank.clone())
+            .unwrap_or_else(|err| warn!("rpc_account_history_sender failed: {:?}", err));
     }
 }
 

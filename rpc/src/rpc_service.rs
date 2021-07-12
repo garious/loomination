@@ -2,9 +2,10 @@
 
 use {
     crate::{
+        account_history::{AccountHistory, AccountKeys},
         max_slots::MaxSlots,
         optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
-        rpc::{rpc_deprecated_v1_7::*, rpc_full::*, rpc_minimal::*, rpc_obsolete_v1_7::*, *},
+        rpc::{rpc_account_history::*, rpc_deprecated_v1_7::*, rpc_full::*, rpc_minimal::*, rpc_obsolete_v1_7::*, *},
         rpc_health::*,
         send_transaction_service::{LeaderInfo, SendTransactionService},
     },
@@ -289,6 +290,8 @@ impl JsonRpcService {
         max_slots: Arc<MaxSlots>,
         leader_schedule_cache: Arc<LeaderScheduleCache>,
         current_transaction_status_slot: Arc<AtomicU64>,
+        account_history: Arc<RwLock<AccountHistory>>,
+        account_keys: Arc<RwLock<AccountKeys>>,
     ) -> Self {
         info!("rpc bound to {:?}", rpc_addr);
         info!("rpc configuration: {:?}", config);
@@ -354,6 +357,7 @@ impl JsonRpcService {
 
         let minimal_api = config.minimal_api;
         let obsolete_v1_7_api = config.obsolete_v1_7_api;
+        let account_history_api = config.enable_rpc_account_history.is_some();
         let (request_processor, receiver) = JsonRpcRequestProcessor::new(
             config,
             snapshot_config.clone(),
@@ -371,6 +375,8 @@ impl JsonRpcService {
             max_slots,
             leader_schedule_cache,
             current_transaction_status_slot,
+            account_history,
+            account_keys,
         );
 
         let leader_info =
@@ -419,6 +425,9 @@ impl JsonRpcService {
                 }
                 if obsolete_v1_7_api {
                     io.extend_with(rpc_obsolete_v1_7::ObsoleteV1_7Impl.to_delegate());
+                }
+                if account_history_api {
+                    io.extend_with(rpc_account_history::AccountHistoryImpl.to_delegate());
                 }
 
                 let request_middleware = RpcRequestMiddleware::new(

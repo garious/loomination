@@ -2,7 +2,7 @@ use crate::{
     blockstore::Blockstore,
     blockstore_processor::{
         self, BlockstoreProcessorError, BlockstoreProcessorResult, CacheBlockMetaSender,
-        ProcessOptions, TransactionStatusSender,
+        ProcessOptions, RpcAccountHistorySender, TransactionStatusSender,
     },
     entry::VerifyRecyclers,
     leader_schedule_cache::LeaderScheduleCache,
@@ -43,6 +43,7 @@ pub fn load(
     process_options: ProcessOptions,
     transaction_status_sender: Option<&TransactionStatusSender>,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
+    rpc_account_history_sender: Option<&RpcAccountHistorySender>,
 ) -> LoadResult {
     if let Some(snapshot_config) = snapshot_config.as_ref() {
         info!(
@@ -65,6 +66,7 @@ pub fn load(
                 process_options,
                 transaction_status_sender,
                 cache_block_meta_sender,
+                rpc_account_history_sender,
                 &snapshot_archive_info,
             );
         } else {
@@ -80,6 +82,7 @@ pub fn load(
         account_paths,
         process_options,
         cache_block_meta_sender,
+        rpc_account_history_sender,
     )
 }
 
@@ -89,6 +92,7 @@ fn load_from_genesis(
     account_paths: Vec<PathBuf>,
     process_options: ProcessOptions,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
+    rpc_account_history_sender: Option<&RpcAccountHistorySender>,
 ) -> LoadResult {
     info!("Processing ledger from genesis");
     to_loadresult(
@@ -98,6 +102,7 @@ fn load_from_genesis(
             account_paths,
             process_options,
             cache_block_meta_sender,
+            rpc_account_history_sender,
         ),
         None,
     )
@@ -113,6 +118,7 @@ fn load_from_snapshot(
     process_options: ProcessOptions,
     transaction_status_sender: Option<&TransactionStatusSender>,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
+    rpc_account_history_sender: Option<&RpcAccountHistorySender>,
     snapshot_archive_info: &SnapshotArchiveInfo,
 ) -> LoadResult {
     info!(
@@ -168,6 +174,7 @@ fn load_from_snapshot(
             &VerifyRecyclers::default(),
             transaction_status_sender,
             cache_block_meta_sender,
+            rpc_account_history_sender,
             timings,
         ),
         Some(deserialized_bank_slot_and_hash),

@@ -538,6 +538,7 @@ fn main() {
         .rpc_config(JsonRpcConfig {
             enable_rpc_transaction_history: true,
             enable_cpi_and_log_storage: true,
+            enable_rpc_account_history: Some(20),
             faucet_addr,
             ..JsonRpcConfig::default()
         })

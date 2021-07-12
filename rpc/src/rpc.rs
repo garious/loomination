@@ -2,6 +2,7 @@
 
 use {
     crate::{
+        account_history::{AccountHistory, AccountKeys},
         max_slots::MaxSlots,
         optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
         parsed_token_accounts::*,
@@ -142,6 +143,7 @@ pub struct JsonRpcConfig {
     pub minimal_api: bool,
     pub obsolete_v1_7_api: bool,
     pub rpc_scan_and_fix_roots: bool,
+    pub enable_rpc_account_history: Option<usize>,
 }
 
 #[derive(Clone)]
@@ -163,6 +165,8 @@ pub struct JsonRpcRequestProcessor {
     max_slots: Arc<MaxSlots>,
     leader_schedule_cache: Arc<LeaderScheduleCache>,
     max_complete_transaction_status_slot: Arc<AtomicU64>,
+    account_history: Arc<RwLock<AccountHistory>>,
+    account_keys: Arc<RwLock<AccountKeys>>,
 }
 impl Metadata for JsonRpcRequestProcessor {}
 
@@ -249,6 +253,8 @@ impl JsonRpcRequestProcessor {
         max_slots: Arc<MaxSlots>,
         leader_schedule_cache: Arc<LeaderScheduleCache>,
         max_complete_transaction_status_slot: Arc<AtomicU64>,
+        account_history: Arc<RwLock<AccountHistory>>,
+        account_keys: Arc<RwLock<AccountKeys>>,
     ) -> (Self, Receiver<TransactionInfo>) {
         let (sender, receiver) = channel();
         (
@@ -270,6 +276,8 @@ impl JsonRpcRequestProcessor {
                 max_slots,
                 leader_schedule_cache,
                 max_complete_transaction_status_slot,
+                account_history,
+                account_keys,
             },
             receiver,
         )
@@ -313,6 +321,8 @@ impl JsonRpcRequestProcessor {
             max_slots: Arc::new(MaxSlots::default()),
             leader_schedule_cache: Arc::new(LeaderScheduleCache::new_from_bank(bank)),
             max_complete_transaction_status_slot: Arc::new(AtomicU64::default()),
+            account_history: Arc::new(RwLock::new(AccountHistory::new())),
+            account_keys: Arc::new(RwLock::new(AccountKeys::new())),
         }
     }
 
@@ -1887,6 +1897,61 @@ impl JsonRpcRequestProcessor {
                 })?)
         } else {
             self.get_filtered_program_accounts(bank, &spl_token_id_v2_0(), filters)
+        }
+    }
+
+    fn get_historical_account_info(
+        &self,
+        pubkey: &Pubkey,
+        slot: Slot,
+        config: Option<RpcAccountInfoConfig>,
+    ) -> Result<RpcResponse<Option<UiAccount>>> {
+        if self.config.enable_rpc_account_history.is_some() {
+            let config = config.unwrap_or_default();
+            let encoding = config.encoding.unwrap_or(UiAccountEncoding::Binary);
+            check_slice_and_encoding(&encoding, config.data_slice.is_some())?;
+
+            let response = match self
+                .account_history
+                .read()
+                .unwrap()
+                .get(&slot)
+                .and_then(|slot_accounts| slot_accounts.get(pubkey))
+            {
+                Some(account) => Some(encode_account(
+                    account,
+                    pubkey,
+                    encoding,
+                    config.data_slice,
+                )?),
+                None => None,
+            };
+            Ok(Response {
+                context: RpcResponseContext { slot },
+                value: response,
+            })
+        } else {
+            Err(RpcCustomError::AccountHistoryNotAvailable.into())
+        }
+    }
+
+    fn add_historical_account_key(&self, pubkey: &Pubkey) -> Result<usize> {
+        if self.config.enable_rpc_account_history.is_some() {
+            let mut w_account_keys = self.account_keys.write().unwrap();
+            w_account_keys.insert(*pubkey);
+            Ok(w_account_keys.len())
+        } else {
+            Err(RpcCustomError::AccountHistoryNotAvailable.into())
+        }
+    }
+
+    fn remove_historical_account_key(&self, pubkey: &Pubkey) -> Result<usize> {
+        if self.config.enable_rpc_account_history.is_some() {
+            let mut w_account_keys = self.account_keys.write().unwrap();
+            w_account_keys.remove(pubkey);
+            Ok(w_account_keys.len())
+        } else {
+            Err(RpcCustomError::AccountHistoryNotAvailable.into())
         }
     }
 }
@@ -3756,6 +3821,84 @@ pub mod rpc_obsolete_v1_7 {
                 .iter()
                 .map(|signature| signature.to_string())
                 .collect())
+        }
+    }
+}
+
+// AccountHistory-related RPC methods
+pub mod rpc_account_history {
+    use super::*;
+    #[rpc]
+    pub trait RpcAccountHistory {
+        type Metadata;
+
+        #[rpc(meta, name = "getHistoricalAccountInfo")]
+        fn get_historical_account_info(
+            &self,
+            meta: Self::Metadata,
+            pubkey_str: String,
+            slot: Slot,
+            config: Option<RpcAccountInfoConfig>,
+        ) -> Result<RpcResponse<Option<UiAccount>>>;
+
+        #[rpc(meta, name = "addHistoricalAccountKey")]
+        fn add_historical_account_key(
+            &self,
+            meta: Self::Metadata,
+            pubkey_str: String,
+        ) -> Result<usize>;
+
+        #[rpc(meta, name = "removeHistoricalAccountKey")]
+        fn remove_historical_account_key(
+            &self,
+            meta: Self::Metadata,
+            pubkey_str: String,
+        ) -> Result<usize>;
+    }
+
+    pub struct AccountHistoryImpl;
+    impl RpcAccountHistory for AccountHistoryImpl {
+        type Metadata = JsonRpcRequestProcessor;
+
+        fn get_historical_account_info(
+            &self,
+            meta: Self::Metadata,
+            pubkey_str: String,
+            slot: Slot,
+            config: Option<RpcAccountInfoConfig>,
+        ) -> Result<RpcResponse<Option<UiAccount>>> {
+            debug!(
+                "get_historical_account_info rpc request received: {:?}, {:?}",
+                pubkey_str, slot
+            );
+            let pubkey = verify_pubkey(&pubkey_str)?;
+            meta.get_historical_account_info(&pubkey, slot, config)
+        }
+
+        fn add_historical_account_key(
+            &self,
+            meta: Self::Metadata,
+            pubkey_str: String,
+        ) -> Result<usize> {
+            debug!(
+                "add_historical_account_key rpc request received: {:?}",
+                pubkey_str
+            );
+            let pubkey = verify_pubkey(&pubkey_str)?;
+            meta.add_historical_account_key(&pubkey)
+        }
+
+        fn remove_historical_account_key(
+            &self,
+            meta: Self::Metadata,
+            pubkey_str: String,
+        ) -> Result<usize> {
+            debug!(
+                "remove_historical_account_key rpc request received: {:?}",
+                pubkey_str
+            );
+            let pubkey = verify_pubkey(&pubkey_str)?;
+            meta.remove_historical_account_key(&pubkey)
         }
     }
 }
