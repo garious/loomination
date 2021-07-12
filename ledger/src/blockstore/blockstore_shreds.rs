@@ -78,7 +78,7 @@ impl ShredWAL {
 
         let shreds: ShredResult<Vec<_>> = buffers
             .into_iter()
-            .map(move |shred| Shred::new_from_serialized_shred(shred))
+            .map(Shred::new_from_serialized_shred)
             .collect();
         let shreds = shreds.map_err(|err| {
             BlockstoreError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(format!(
@@ -174,13 +174,9 @@ impl Blockstore {
         slot: Slot,
         index: u64,
     ) -> Result<Option<Vec<u8>>> {
-        let payload = self.data_slot_cache(slot).and_then(|slot_cache| {
-            slot_cache
-                .read()
-                .unwrap()
-                .get(&index)
-                .map(|shred_ref| shred_ref.clone())
-        });
+        let payload = self
+            .data_slot_cache(slot)
+            .and_then(|slot_cache| slot_cache.read().unwrap().get(&index).cloned());
         Ok(payload)
     }
 
@@ -270,7 +266,7 @@ impl Blockstore {
                 .unwrap()
                 .iter()
                 .map(|(_, shred)| {
-                    file.write_all(&shred).map_err(|err| {
+                    file.write_all(shred).map_err(|err| {
                         BlockstoreError::Io(IoError::new(
                             ErrorKind::Other,
                             format!("Unable to write slot {}: {}", slot, err),
@@ -291,6 +287,7 @@ impl Blockstore {
 
     /// Purge an entire slot of data shreds
     pub(crate) fn purge_data_shreds(&self, slot: Slot) {
+        // Remove from the cache; no issues if the slot had previously been flushed
         self.data_shred_cache.remove(&slot);
         // Could get errors such as file doesn't exist; we don't care so just eat the error
         let _ = fs::remove_file(self.slot_data_shreds_path(slot));
@@ -419,7 +416,7 @@ impl Blockstore {
         Some(
             buffers
                 .into_iter()
-                .map(move |shred| Shred::new_from_serialized_shred(shred))
+                .map(Shred::new_from_serialized_shred)
                 .collect(),
         )
     }

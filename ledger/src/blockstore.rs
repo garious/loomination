@@ -1593,7 +1593,7 @@ impl Blockstore {
             shreds
         } else {
             self.get_data_shreds_for_slot_from_fs(slot, start_index)
-                .unwrap_or(Ok(vec![]))
+                .unwrap_or_else(|| Ok(vec![]))
         }
     }
 
@@ -1767,7 +1767,7 @@ impl Blockstore {
                 continue;
             }
             // Get the tick that will be used to figure out the timeout for this hole
-            let reference_tick = u64::from(Shred::reference_tick_from_data(&shred));
+            let reference_tick = u64::from(Shred::reference_tick_from_data(shred));
             // Break out early if the higher index holes have not timed out yet
             if ticks_since_first_insert < reference_tick + MAX_TURBINE_DELAY_IN_TICKS {
                 return missing_indexes;
