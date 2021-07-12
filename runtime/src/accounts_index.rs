@@ -540,6 +540,16 @@ impl<'a, T> AccountsIndexIterator<'a, T> {
         }
     }
 
+    fn start_bin(&self) -> usize {
+        // start in bin where 'start_bound' would exist
+        match &self.start_bound {
+            Bound::Included(start_bound) | Bound::Excluded(start_bound) => {
+                get_bin_pubkey(start_bound)
+            }
+            Bound::Unbounded => 0,
+        }
+    }
+
     pub fn new<R>(account_maps: &'a LockMapTypeSlice<T>, range: Option<R>) -> Self
     where
         R: RangeBounds<Pubkey>,
@@ -566,8 +576,9 @@ impl<'a, T: 'static + Clone> Iterator for AccountsIndexIterator<'a, T> {
             return None;
         }
 
+        let start_bin = self.start_bin();
         let mut chunk: Vec<(Pubkey, AccountMapEntry<T>)> = Vec::with_capacity(ITER_BATCH_SIZE);
-        'outer: for i in self.account_maps.iter() {
+        'outer: for i in self.account_maps.iter().skip(start_bin) {
             for (pubkey, account_map_entry) in
                 i.read().unwrap().range((self.start_bound, self.end_bound))
             {
@@ -1735,6 +1746,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport + std::marker::Sync + std::mark
 pub mod tests {
     use super::*;
     use solana_sdk::signature::{Keypair, Signer};
+    use std::ops::RangeInclusive;
 
     pub enum SecondaryIndexTypes<'a> {
         RwLock(&'a SecondaryIndex<RwLockSecondaryIndexEntry>),
@@ -3781,5 +3793,34 @@ pub mod tests {
         fn is_zero_lamport(&self) -> bool {
             false
         }
+    }
+
+    #[test]
+    fn test_start_bin() {
+        let index = AccountsIndex::<bool>::default();
+        let iter = AccountsIndexIterator::new(&index.account_maps, None::<RangeInclusive<Pubkey>>);
+        assert_eq!(iter.start_bin(), 0); // no range, so 0
+
+        let key = Pubkey::new(&[0; 32]);
+        let iter =
+            AccountsIndexIterator::new(&index.account_maps, Some(RangeInclusive::new(key, key)));
+        assert_eq!(iter.start_bin(), 0); // start at pubkey 0, so 0
+        let iter =
+            AccountsIndexIterator::new(&index.account_maps, Some((Included(key), Excluded(key))));
+        assert_eq!(iter.start_bin(), 0); // start at pubkey 0, so 0
+        let iter =
+            AccountsIndexIterator::new(&index.account_maps, Some((Excluded(key), Excluded(key))));
+        assert_eq!(iter.start_bin(), 0); // start at pubkey 0, so 0
+
+        let key = Pubkey::new(&[0xff; 32]);
+        let iter =
+            AccountsIndexIterator::new(&index.account_maps, Some(RangeInclusive::new(key, key)));
+        assert_eq!(iter.start_bin(), BINS - 1); // start at highest possible pubkey, so BINS - 1
+        let iter =
+            AccountsIndexIterator::new(&index.account_maps, Some((Included(key), Excluded(key))));
+        assert_eq!(iter.start_bin(), BINS - 1); // start at highest possible pubkey, so BINS - 1
+        let iter =
+            AccountsIndexIterator::new(&index.account_maps, Some((Excluded(key), Excluded(key))));
+        assert_eq!(iter.start_bin(), BINS - 1); // start at highest possible pubkey, so BINS - 1
     }
 }
