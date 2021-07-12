@@ -296,12 +296,12 @@ mod tests {
         let cluster_info = ClusterInfo::new_with_invalid_keypair(this_node);
         {
             let now = timestamp();
-            let mut gossip = cluster_info.gossip.write().unwrap();
+            let mut gossip_crds = cluster_info.gossip.crds.write().unwrap();
             // First node is pushed to crds table by ClusterInfo constructor.
             for node in nodes.iter().skip(1) {
                 let node = CrdsData::ContactInfo(node.clone());
                 let node = CrdsValue::new_unsigned(node);
-                assert_eq!(gossip.crds.insert(node, now), Ok(()));
+                assert_eq!(gossip_crds.insert(node, now), Ok(()));
             }
         }
         (nodes, stakes, cluster_info)

@@ -321,11 +321,10 @@ pub fn cluster_info_scale() {
                     .iter()
                     .filter(|v| v.message.account_keys == tx.message.account_keys)
                     .count();
-                let gossip = node.gossip.read().unwrap();
-                num_old += gossip.push.num_old.load(Ordering::Relaxed);
-                num_push_total += gossip.push.num_total.load(Ordering::Relaxed);
-                num_pushes += gossip.push.num_pushes.load(Ordering::Relaxed);
-                num_pulls += gossip.pull.num_pulls.load(Ordering::Relaxed);
+                num_old += node.gossip.push.num_old.load(Ordering::Relaxed);
+                num_push_total += node.gossip.push.num_total.load(Ordering::Relaxed);
+                num_pushes += node.gossip.push.num_pushes.load(Ordering::Relaxed);
+                num_pulls += node.gossip.pull.num_pulls.load(Ordering::Relaxed);
                 if has_tx == 0 {
                     not_done += 1;
                 }
@@ -348,11 +347,10 @@ pub fn cluster_info_scale() {
         );
         sleep(Duration::from_millis(200));
         for (node, _, _) in nodes.iter() {
-            let gossip = node.gossip.read().unwrap();
-            gossip.push.num_old.store(0, Ordering::Relaxed);
-            gossip.push.num_total.store(0, Ordering::Relaxed);
-            gossip.push.num_pushes.store(0, Ordering::Relaxed);
-            gossip.pull.num_pulls.store(0, Ordering::Relaxed);
+            node.gossip.push.num_old.store(0, Ordering::Relaxed);
+            node.gossip.push.num_total.store(0, Ordering::Relaxed);
+            node.gossip.push.num_pushes.store(0, Ordering::Relaxed);
+            node.gossip.pull.num_pulls.store(0, Ordering::Relaxed);
         }
     }
 
