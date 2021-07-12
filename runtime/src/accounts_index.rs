@@ -1028,14 +1028,21 @@ impl<T: 'static + Clone + IsCached + ZeroLamport + std::marker::Sync + std::mark
                 let list_r = self.get(&pubkey, Some(ancestors), max_root);
                 read_lock_timer.stop();
                 read_lock_elapsed += read_lock_timer.as_us();
-                if let AccountIndexGetResult::Found(locked_entry, index) = list_r {
+                let result;
+                if let AccountIndexGetResult::Found(locked_entry, index) = &list_r {
                     let slot_list = locked_entry.slot_list();
+                    result = Some(slot_list[*index].clone())
+                }else {
+                    continue;
+                }
+                drop(list_r);
+                let result = result.unwrap();
+                
                     let mut load_account_timer = Measure::start("load_account");
-                    let list_item = &slot_list[index];
-                    func(&pubkey, (&list_item.1, list_item.0));
+                //let list_item = &slot_list[index];
+                func(&pubkey, (&result.1, result.0));
                     load_account_timer.stop();
                     load_account_elapsed += load_account_timer.as_us();
-                }
             }
             iterator_timer = Measure::start("iterator_elapsed");
         }
