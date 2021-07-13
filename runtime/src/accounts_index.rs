@@ -594,7 +594,7 @@ pub trait ZeroLamport {
     fn is_zero_lamport(&self) -> bool;
 }
 
-fn get_bin_pubkey(pubkey: &Pubkey) -> usize {
+pub(crate) fn get_bin_pubkey(pubkey: &Pubkey) -> usize {
     let byte_of_pubkey_to_bin = 0; // TODO: this should not be 0. For now it needs to be due to requests for in-order pubkeys
     (pubkey.as_ref()[byte_of_pubkey_to_bin] as usize) * BINS / ((u8::MAX as usize) + 1)
 }
