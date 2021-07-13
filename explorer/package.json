@@ -27,7 +27,7 @@
     "@types/socket.io-client": "^3.0.0",
     "bignumber.js": "^9.0.1",
     "bn.js": "^5.2.0",
-    "bootstrap": "^4.6.0",
+    "bootstrap": "^5.0.2",
     "bs58": "^4.0.1",
     "chai": "^4.3.4",
     "chart.js": "^2.9.4",
