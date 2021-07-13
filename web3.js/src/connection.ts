@@ -26,6 +26,7 @@ import {IWSRequestParams} from 'rpc-websockets/dist/lib/client';
 
 import {AgentManager} from './agent-manager';
 import {EpochSchedule} from './epoch-schedule';
+import {SendTransactionError} from './errors';
 import {NonceAccount} from './nonce-account';
 import {PublicKey} from './publickey';
 import {Signer} from './keypair';
@@ -3444,7 +3445,16 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('simulateTransaction', args);
     const res = create(unsafeRes, SimulatedTransactionResponseStruct);
     if ('error' in res) {
-      throw new Error('failed to simulate transaction: ' + res.error.message);
+      let logs;
+      if ('data' in res.error) {
+        logs = res.error.data.logs;
+        if (logs && Array.isArray(logs)) {
+          const traceIndent = '\n    ';
+          const logTrace = traceIndent + logs.join(traceIndent);
+          console.error(res.error.message, logTrace);
+        }
+      }
+      throw new SendTransactionError('failed to simulate transaction: ' + res.error.message, logs);
     }
     return res.result;
   }
@@ -3528,15 +3538,16 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('sendTransaction', args);
     const res = create(unsafeRes, SendTransactionRpcResult);
     if ('error' in res) {
+      let logs;
       if ('data' in res.error) {
-        const logs = res.error.data.logs;
+        logs = res.error.data.logs;
         if (logs && Array.isArray(logs)) {
           const traceIndent = '\n    ';
           const logTrace = traceIndent + logs.join(traceIndent);
           console.error(res.error.message, logTrace);
         }
       }
-      throw new Error('failed to send transaction: ' + res.error.message);
+      throw new SendTransactionError('failed to send transaction: ' + res.error.message, logs);
     }
     return res.result;
   }
