@@ -19,14 +19,14 @@ use std::{
 };
 
 #[derive(Default)]
-pub struct CostUpdateServiceTiming {
+pub struct CostGoverningServiceTiming {
     last_print: u64,
     update_cost_model_count: u64,
     update_cost_model_elapsed: u64,
     persist_cost_table_elapsed: u64,
 }
 
-impl CostUpdateServiceTiming {
+impl CostGoverningServiceTiming {
     fn update(
         &mut self,
         update_cost_model_count: u64,
@@ -42,7 +42,6 @@ impl CostUpdateServiceTiming {
         if elapsed_ms > 1000 {
             datapoint_info!(
                 "replay-service-timing-stats",
-                ("total_elapsed_us", elapsed_ms * 1000, i64),
                 (
                     "update_cost_model_count",
                     self.update_cost_model_count as i64,
@@ -60,7 +59,7 @@ impl CostUpdateServiceTiming {
                 ),
             );
 
-            *self = CostUpdateServiceTiming::default();
+            *self = CostGoverningServiceTiming::default();
             self.last_print = now;
         }
     }
@@ -68,12 +67,11 @@ impl CostUpdateServiceTiming {
 
 pub type CostUpdateReceiver = Receiver<ExecuteTimings>;
 
-pub struct CostUpdateService {
+pub struct CostGoverningService {
     thread_hdl: JoinHandle<()>,
 }
 
-impl CostUpdateService {
-    #[allow(clippy::new_ret_no_self)]
+impl CostGoverningService {
     pub fn new(
         exit: Arc<AtomicBool>,
         blockstore: Arc<Blockstore>,
@@ -100,7 +98,7 @@ impl CostUpdateService {
         cost_model: Arc<RwLock<CostModel>>,
         cost_update_receiver: CostUpdateReceiver,
     ) {
-        let mut cost_update_service_timing = CostUpdateServiceTiming::default();
+        let mut cost_update_service_timing = CostGoverningServiceTiming::default();
         let mut dirty = false;
         let wait_timer = Duration::from_millis(100);
 
@@ -195,7 +193,7 @@ mod tests {
     fn test_update_cost_model_with_empty_execute_timings() {
         let cost_model = Arc::new(RwLock::new(CostModel::default()));
         let empty_execute_timings = ExecuteTimings::default();
-        CostUpdateService::update_cost_model(&cost_model, &empty_execute_timings);
+        CostGoverningService::update_cost_model(&cost_model, &empty_execute_timings);
 
         assert_eq!(
             0,
@@ -228,7 +226,7 @@ mod tests {
                     count,
                 },
             );
-            CostUpdateService::update_cost_model(&cost_model, &execute_timings);
+            CostGoverningService::update_cost_model(&cost_model, &execute_timings);
             assert_eq!(
                 1,
                 cost_model
@@ -261,7 +259,7 @@ mod tests {
                     count,
                 },
             );
-            CostUpdateService::update_cost_model(&cost_model, &execute_timings);
+            CostGoverningService::update_cost_model(&cost_model, &execute_timings);
             assert_eq!(
                 1,
                 cost_model

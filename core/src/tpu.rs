@@ -3,6 +3,9 @@
 
 use crate::{
     banking_stage::BankingStage,
+    block_generation_cost_tracking_service::{
+        BlockGenerationCostTrackingService, CommittedTransactionBatch,
+    },
     broadcast_stage::{BroadcastStage, BroadcastStageType, RetransmitSlotsReceiver},
     cluster_info_vote_listener::{
         ClusterInfoVoteListener, GossipDuplicateConfirmedSlotsSender, GossipVerifiedVoteHashSender,
@@ -30,7 +33,7 @@ use std::{
     net::UdpSocket,
     sync::{
         atomic::AtomicBool,
-        mpsc::{channel, Receiver},
+        mpsc::{channel, Receiver, Sender},
         Arc, Mutex, RwLock,
     },
     thread,
@@ -44,6 +47,7 @@ pub struct Tpu {
     banking_stage: BankingStage,
     cluster_info_vote_listener: ClusterInfoVoteListener,
     broadcast_stage: BroadcastStage,
+    block_generation_cost_tracking_service: BlockGenerationCostTrackingService,
 }
 
 impl Tpu {
@@ -107,6 +111,16 @@ impl Tpu {
         );
 
         let cost_tracker = Arc::new(RwLock::new(CostTracker::new(cost_model.clone())));
+        let (block_generation_cost_tracking_sender, block_generation_cost_tracking_receiver): (
+            Sender<CommittedTransactionBatch>,
+            Receiver<CommittedTransactionBatch>,
+        ) = channel();
+        let block_generation_cost_tracking_service = BlockGenerationCostTrackingService::new(
+            exit.clone(),
+            cost_tracker.clone(),
+            block_generation_cost_tracking_receiver,
+        );
+
         let banking_stage = BankingStage::new(
             cluster_info,
             poh_recorder,
@@ -115,6 +129,7 @@ impl Tpu {
             transaction_status_sender,
             replay_vote_sender,
             cost_tracker,
+            block_generation_cost_tracking_sender,
         );
 
         let broadcast_stage = broadcast_type.new_broadcast_stage(
@@ -134,6 +149,7 @@ impl Tpu {
             banking_stage,
             cluster_info_vote_listener,
             broadcast_stage,
+            block_generation_cost_tracking_service,
         }
     }
 
@@ -143,6 +159,7 @@ impl Tpu {
             self.sigverify_stage.join(),
             self.cluster_info_vote_listener.join(),
             self.banking_stage.join(),
+            self.block_generation_cost_tracking_service.join(),
         ];
         let broadcast_result = self.broadcast_stage.join();
         for result in results {

@@ -9,6 +9,7 @@
 
 pub mod accounts_hash_verifier;
 pub mod banking_stage;
+pub mod block_generation_cost_tracking_service;
 pub mod broadcast_stage;
 pub mod cache_block_meta_service;
 pub mod cluster_info_vote_listener;
@@ -19,9 +20,9 @@ pub mod cluster_slots_service;
 pub mod commitment_service;
 pub mod completed_data_sets_service;
 pub mod consensus;
+pub mod cost_governing_service;
 pub mod cost_model;
 pub mod cost_tracker;
-pub mod cost_update_service;
 pub mod execute_cost_table;
 pub mod fetch_stage;
 pub mod fork_choice;

@@ -12,8 +12,8 @@ use crate::{
     cluster_slots::ClusterSlots,
     completed_data_sets_service::CompletedDataSetsSender,
     consensus::Tower,
+    cost_governing_service::CostGoverningService,
     cost_model::CostModel,
-    cost_update_service::CostUpdateService,
     ledger_cleanup_service::LedgerCleanupService,
     replay_stage::{ReplayStage, ReplayStageConfig},
     retransmit_stage::RetransmitStage,
@@ -66,7 +66,7 @@ pub struct Tvu {
     ledger_cleanup_service: Option<LedgerCleanupService>,
     accounts_background_service: AccountsBackgroundService,
     accounts_hash_verifier: AccountsHashVerifier,
-    cost_update_service: CostUpdateService,
+    cost_governing_service: CostGoverningService,
 }
 
 pub struct Sockets {
@@ -277,7 +277,7 @@ impl Tvu {
             Sender<ExecuteTimings>,
             Receiver<ExecuteTimings>,
         ) = channel();
-        let cost_update_service = CostUpdateService::new(
+        let cost_governing_service = CostGoverningService::new(
             exit.clone(),
             blockstore.clone(),
             cost_model.clone(),
@@ -332,7 +332,7 @@ impl Tvu {
             ledger_cleanup_service,
             accounts_background_service,
             accounts_hash_verifier,
-            cost_update_service,
+            cost_governing_service,
         }
     }
 
@@ -346,7 +346,7 @@ impl Tvu {
         self.accounts_background_service.join()?;
         self.replay_stage.join()?;
         self.accounts_hash_verifier.join()?;
-        self.cost_update_service.join()?;
+        self.cost_governing_service.join()?;
         Ok(())
     }
 }

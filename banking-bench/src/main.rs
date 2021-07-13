@@ -26,7 +26,11 @@ use solana_sdk::{
     transaction::Transaction,
 };
 use std::{
-    sync::{atomic::Ordering, mpsc::Receiver, Arc, Mutex, RwLock},
+    sync::{
+        atomic::Ordering,
+        mpsc::{channel, Receiver},
+        Arc, Mutex, RwLock,
+    },
     thread::sleep,
     time::{Duration, Instant},
 };
@@ -217,6 +221,7 @@ fn main() {
             create_test_recorder(&bank, &blockstore, None);
         let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
         let cluster_info = Arc::new(cluster_info);
+        let (cost_tracking_sender, _) = channel();
         let banking_stage = BankingStage::new(
             &cluster_info,
             &poh_recorder,
@@ -227,6 +232,7 @@ fn main() {
             Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
                 CostModel::default(),
             ))))),
+            cost_tracking_sender,
         );
         poh_recorder.lock().unwrap().set_bank(&bank);
 

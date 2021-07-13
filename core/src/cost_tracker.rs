@@ -73,6 +73,10 @@ impl CostTracker {
         }
     }
 
+    pub fn get_current_slot(&self) -> Slot {
+        self.current_bank_slot
+    }
+
     pub fn try_add(&mut self, transaction_cost: &TransactionCost) -> Result<u64, &'static str> {
         let cost = transaction_cost.account_access_cost + transaction_cost.execution_cost;
         self.would_fit(&transaction_cost.writable_accounts, &cost)?;
