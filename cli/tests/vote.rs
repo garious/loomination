@@ -83,13 +83,48 @@ fn test_vote_authorize_and_withdraw() {
     check_recent_balance(expected_balance, &rpc_client, &vote_account_pubkey);
 
     // Authorize vote account withdrawal to another signer
-    let withdraw_authority = Keypair::new();
+    let first_withdraw_authority = Keypair::new();
     config.signers = vec![&default_signer];
+    config.command = CliCommand::VoteAuthorize {
+        vote_account_pubkey,
+        new_authorized_pubkey: first_withdraw_authority.pubkey(),
+        vote_authorize: VoteAuthorize::Withdrawer,
+        memo: None,
+        authorized: 0,
+        new_authorized: None,
+    };
+    process_command(&config).unwrap();
+    let vote_account = rpc_client
+        .get_account(&vote_account_keypair.pubkey())
+        .unwrap();
+    let vote_state: VoteStateVersions = vote_account.state().unwrap();
+    let authorized_withdrawer = vote_state.convert_to_current().authorized_withdrawer;
+    assert_eq!(authorized_withdrawer, first_withdraw_authority.pubkey());
+
+    // Authorize vote account withdrawal to another signer with checked instruction
+    let withdraw_authority = Keypair::new();
+    config.signers = vec![&default_signer, &first_withdraw_authority];
     config.command = CliCommand::VoteAuthorize {
         vote_account_pubkey,
         new_authorized_pubkey: withdraw_authority.pubkey(),
         vote_authorize: VoteAuthorize::Withdrawer,
         memo: None,
+        authorized: 1,
+        new_authorized: Some(1),
+    };
+    process_command(&config).unwrap_err(); // unsigned by new authority should fail
+    config.signers = vec![
+        &default_signer,
+        &first_withdraw_authority,
+        &withdraw_authority,
+    ];
+    config.command = CliCommand::VoteAuthorize {
+        vote_account_pubkey,
+        new_authorized_pubkey: withdraw_authority.pubkey(),
+        vote_authorize: VoteAuthorize::Withdrawer,
+        memo: None,
+        authorized: 1,
+        new_authorized: Some(2),
     };
     process_command(&config).unwrap();
     let vote_account = rpc_client
