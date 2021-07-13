@@ -10,8 +10,8 @@ use futures::{future::join_all, Future, FutureExt};
 pub use solana_banks_interface::{BanksClient as TarpcClient, TransactionStatus};
 use solana_banks_interface::{BanksRequest, BanksResponse};
 use solana_program::{
-    clock::Slot, fee_calculator::FeeCalculator, hash::Hash, program_pack::Pack, pubkey::Pubkey,
-    rent::Rent, sysvar,
+    clock::Clock, clock::Slot, fee_calculator::FeeCalculator, hash::Hash, program_pack::Pack,
+    pubkey::Pubkey, rent::Rent, sysvar,
 };
 use solana_sdk::{
     account::{from_account, Account},
@@ -113,6 +113,17 @@ impl BanksClient {
         transaction: Transaction,
     ) -> impl Future<Output = io::Result<()>> + '_ {
         self.send_transaction_with_context(context::current(), transaction)
+    }
+
+    /// Return the cluster clock
+    pub fn get_clock(&mut self) -> impl Future<Output = io::Result<Clock>> + '_ {
+        self.get_account(sysvar::clock::id()).map(|result| {
+            let clock_sysvar = result?
+                .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Clock sysvar not present"))?;
+            from_account::<Clock, _>(&clock_sysvar).ok_or_else(|| {
+                io::Error::new(io::ErrorKind::Other, "Failed to deserialize Clock sysvar")
+            })
+        })
     }
 
     /// Return the fee parameters associated with a recent, rooted blockhash. The cluster
