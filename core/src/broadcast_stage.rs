@@ -23,7 +23,7 @@ use solana_poh::poh_recorder::WorkingBankEntry;
 use solana_runtime::{bank::Bank, bank_forks::BankForks};
 use solana_sdk::timing::timestamp;
 use solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Keypair};
-use solana_streamer::sendmmsg::send_mmsg;
+use solana_streamer::sendmmsg::batch_send;
 use std::sync::atomic::AtomicU64;
 use std::{
     collections::HashMap,
@@ -420,15 +420,9 @@ pub fn broadcast_shreds(
     shred_select.stop();
     transmit_stats.shred_select += shred_select.as_us();
 
-    let mut sent = 0;
     let mut send_mmsg_time = Measure::start("send_mmsg");
-    while sent < packets.len() {
-        match send_mmsg(s, &packets[sent..]) {
-            Ok(n) => sent += n,
-            Err(e) => {
-                return Err(Error::Io(e));
-            }
-        }
+    if let Err(err) = batch_send(s, &packets[..]) {
+        error!("broadcast_shreds batch_send error: {:?}", err);
     }
     send_mmsg_time.stop();
     transmit_stats.send_mmsg_elapsed += send_mmsg_time.as_us();
