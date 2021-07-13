@@ -1,7 +1,8 @@
 use crate::erasure::ErasureConfig;
+use bv::BitVec;
 use serde::{Deserialize, Serialize};
 use solana_sdk::clock::Slot;
-use std::{collections::BTreeSet, ops::RangeBounds};
+use std::{cmp, ops::Range};
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
 // The Meta column family
@@ -42,8 +43,10 @@ pub struct Index {
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 pub struct ShredIndex {
-    /// Map representing presence/absence of shreds
-    index: BTreeSet<u64>,
+    /// BitVector representing presence/absence of shreds
+    index: BitVec,
+    /// Number of shreds present
+    num_present: usize,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
@@ -101,22 +104,38 @@ impl Index {
 
 impl ShredIndex {
     pub fn num_shreds(&self) -> usize {
-        self.index.len()
+        self.num_present
     }
 
-    pub fn present_in_bounds(&self, bounds: impl RangeBounds<u64>) -> usize {
-        self.index.range(bounds).count()
+    pub fn present_in_bounds(&self, range: Range<u64>) -> usize {
+        let mut count = 0;
+        // We should only search in the overlap of the index's values and range
+        for idx in cmp::min(range.start, self.index.len())..cmp::min(range.end, self.index.len()) {
+            if self.index.get(idx) {
+                count += 1;
+            }
+        }
+        count
     }
 
     pub fn is_present(&self, index: u64) -> bool {
-        self.index.contains(&index)
+        // BitVec::get() panics if index is out of range so explicitly check
+        index < self.index.len() && self.index.get(index)
     }
 
     pub fn set_present(&mut self, index: u64, presence: bool) {
-        if presence {
-            self.index.insert(index);
-        } else {
-            self.index.remove(&index);
+        // Extend self.index if necessary to accomodate index, but do not shrink
+        self.index
+            .resize(cmp::max(index + 1, self.index.len()), false);
+        let previous = self.index.get(index);
+        // Only need to update state if the value is changing; this prevents double count on add/remove
+        if previous ^ presence {
+            self.index.set(index, presence);
+            if presence {
+                self.num_present += 1;
+            } else {
+                self.num_present -= 1;
+            }
         }
     }
 
@@ -124,10 +143,6 @@ impl ShredIndex {
         for (idx, present) in presence.into_iter() {
             self.set_present(idx, present);
         }
-    }
-
-    pub fn largest(&self) -> Option<u64> {
-        self.index.iter().rev().next().copied()
     }
 }
 
@@ -200,8 +215,9 @@ impl ErasureMeta {
     pub fn status(&self, index: &Index) -> ErasureMetaStatus {
         use ErasureMetaStatus::*;
 
-        let coding_indices = self.set_index..self.set_index + self.config.num_coding() as u64;
-        let num_coding = index.coding().present_in_bounds(coding_indices);
+        let num_coding = index
+            .coding()
+            .present_in_bounds(self.set_index..self.set_index + self.config.num_coding() as u64);
         let num_data = index
             .data()
             .present_in_bounds(self.set_index..self.set_index + self.config.num_data() as u64);
@@ -263,6 +279,46 @@ mod test {
     use super::*;
     use rand::{seq::SliceRandom, thread_rng};
     use std::iter::repeat;
+
+    #[test]
+    fn test_shred_index() {
+        solana_logger::setup();
+        let mut index = ShredIndex::default();
+
+        let new_idx = 2;
+        // index should be empty to start
+        assert!(!index.is_present(new_idx));
+        assert_eq!(index.num_shreds(), 0);
+
+        // Set a value as present
+        index.set_present(new_idx, true);
+        assert!(index.is_present(new_idx));
+        assert_eq!(index.num_shreds(), 1);
+
+        // Set that same value as no longer present
+        index.set_present(new_idx, false);
+        assert!(!index.is_present(new_idx));
+        assert_eq!(index.num_shreds(), 0);
+
+        // Check boundary conditions; start is inclusive, end is exclusive
+        index.set_many_present((5..10_u64).zip(repeat(true)));
+        assert_eq!(index.present_in_bounds(0..5), 0);
+        assert_eq!(index.present_in_bounds(2..7), 2);
+        assert_eq!(index.present_in_bounds(5..10), 5);
+        assert_eq!(index.present_in_bounds(7..12), 3);
+        assert_eq!(index.present_in_bounds(10..15), 0);
+
+        // Clear the index, and check that repeat set_present() calls do not corrupt state
+        index.set_many_present((0..10_u64).zip(repeat(false)));
+        assert_eq!(index.num_shreds(), 0);
+        let new_idx = 10;
+        index.set_present(new_idx, true);
+        index.set_present(new_idx, true);
+        assert_eq!(index.num_shreds(), 1);
+        index.set_present(new_idx, false);
+        index.set_present(new_idx, false);
+        assert_eq!(index.num_shreds(), 0);
+    }
 
     #[test]
     fn test_erasure_meta_status() {
