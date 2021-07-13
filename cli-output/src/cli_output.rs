@@ -1372,8 +1372,8 @@ impl fmt::Display for CliVoteAccount {
             build_balance_message(self.account_balance, self.use_lamports_unit, true)
         )?;
         writeln!(f, "Validator Identity: {}", self.validator_identity)?;
-        writeln!(f, "Authorized Voters: {}", self.authorized_voters)?;
-        writeln!(f, "Authorized Withdrawer: {}", self.authorized_withdrawer)?;
+        writeln!(f, "Vote Authority: {}", self.authorized_voters)?;
+        writeln!(f, "Withdraw Authority: {}", self.authorized_withdrawer)?;
         writeln!(f, "Credits: {}", self.credits)?;
         writeln!(f, "Commission: {}%", self.commission)?;
         writeln!(
