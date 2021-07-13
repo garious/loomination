@@ -247,6 +247,26 @@ fn process_entries_with_callback(
     let mut tick_hashes = vec![];
     let mut rng = thread_rng();
 
+    let mut pubkeys = HashSet::new();
+    for entry in entries.iter() {
+        if let EntryType::Transactions(transactions) = entry {
+            for transaction in transactions.iter() {
+                for key in &transaction.transaction().message.account_keys {
+                    pubkeys.insert(*key);
+                }
+            }
+        }
+    }
+    let bank_ = bank.clone();
+    std::thread::Builder::new()
+        .name("solana-accounts-transaction-account-loader".to_string())
+        .spawn(move || {
+            for key in pubkeys {
+                bank_.load_accounts_into_read_only_cache(&key);
+            }
+        })
+        .unwrap();
+
     for entry in entries {
         match entry {
             EntryType::Tick(hash) => {
