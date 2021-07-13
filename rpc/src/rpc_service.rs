@@ -745,9 +745,9 @@ mod tests {
         // This node is ahead of the trusted validators
         cluster_info
             .gossip
+            .crds
             .write()
             .unwrap()
-            .crds
             .insert(
                 CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHash::new(
                     trusted_validators[0],
@@ -765,9 +765,9 @@ mod tests {
         // Node is slightly behind the trusted validators
         cluster_info
             .gossip
+            .crds
             .write()
             .unwrap()
-            .crds
             .insert(
                 CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHash::new(
                     trusted_validators[1],
@@ -781,9 +781,9 @@ mod tests {
         // Node is far behind the trusted validators
         cluster_info
             .gossip
+            .crds
             .write()
             .unwrap()
-            .crds
             .insert(
                 CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHash::new(
                     trusted_validators[2],
