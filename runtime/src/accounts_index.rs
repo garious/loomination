@@ -647,7 +647,7 @@ impl<T> Default for AccountsIndex<T> {
         Self {
             account_maps: (0..BINS)
                 .into_iter()
-                .map(|_| RwLock::new(AccountMap::<Pubkey, AccountMapEntry<T>>::default()))
+                .map(|_| RwLock::new(AccountMap::default()))
                 .collect::<Vec<_>>(),
             program_id_index: SecondaryIndex::<DashMapSecondaryIndexEntry>::new(
                 "program_id_index_stats",
