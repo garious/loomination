@@ -3294,7 +3294,7 @@ mod tests {
         let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(node.info));
         cluster_info.insert_info(spy);
         {
-            let mut gossip = cluster_info.gossip.write().unwrap();
+            let gossip = cluster_info.gossip.read().unwrap();
             gossip.refresh_push_active_set(
                 &cluster_info.id(),
                 cluster_info.my_shred_version(),
@@ -3414,7 +3414,7 @@ mod tests {
             .mock_pong(peer.id, peer.gossip, Instant::now());
         cluster_info.insert_info(peer);
         {
-            let mut gossip = cluster_info.gossip.write().unwrap();
+            let gossip = cluster_info.gossip.read().unwrap();
             gossip.refresh_push_active_set(
                 &cluster_info.id(),
                 cluster_info.my_shred_version(),
