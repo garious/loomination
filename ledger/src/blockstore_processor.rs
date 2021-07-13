@@ -377,6 +377,7 @@ pub struct ProcessOptions {
     pub limit_load_slot_count_from_snapshot: Option<usize>,
     pub allow_dead_slots: bool,
     pub accounts_db_test_hash_calculation: bool,
+    pub verify_index: bool,
     pub shrink_ratio: AccountShrinkThreshold,
 }
 
