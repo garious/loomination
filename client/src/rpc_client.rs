@@ -1092,6 +1092,34 @@ impl RpcClient {
         )
     }
 
+    pub fn get_fees(&self) -> ClientResult<Fees> {
+        Ok(self.get_fees_with_commitment(self.commitment())?.value)
+    }
+
+    pub fn get_fees_with_commitment(&self, commitment_config: CommitmentConfig) -> RpcResult<Fees> {
+        let Response {
+            context,
+            value: fees,
+        } = self.send::<Response<RpcFees>>(
+            RpcRequest::GetFees,
+            json!([self.maybe_map_commitment(commitment_config)?]),
+        )?;
+        let blockhash = fees.blockhash.parse().map_err(|_| {
+            ClientError::new_with_request(
+                RpcError::ParseError("Hash".to_string()).into(),
+                RpcRequest::GetFees,
+            )
+        })?;
+        Ok(Response {
+            context,
+            value: Fees {
+                blockhash,
+                fee_calculator: fees.fee_calculator,
+                last_valid_block_height: fees.last_valid_block_height,
+            },
+        })
+    }
+
     pub fn get_recent_blockhash(&self) -> ClientResult<(Hash, FeeCalculator)> {
         let (blockhash, fee_calculator, _last_valid_slot) = self
             .get_recent_blockhash_with_commitment(self.commitment())?
