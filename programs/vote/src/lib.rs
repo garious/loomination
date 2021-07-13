@@ -2,6 +2,7 @@
 #![allow(clippy::integer_arithmetic)]
 
 pub mod authorized_voters;
+pub mod node_instance;
 pub mod vote_instruction;
 pub mod vote_state;
 pub mod vote_transaction;

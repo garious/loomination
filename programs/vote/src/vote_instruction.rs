@@ -2,7 +2,7 @@
 //! Receive and processes votes from validators
 
 use crate::{
-    id,
+    id, node_instance,
     vote_state::{self, Vote, VoteAuthorize, VoteInit, VoteState},
 };
 use log::*;
@@ -15,7 +15,7 @@ use solana_sdk::{
     hash::Hash,
     instruction::{AccountMeta, Instruction, InstructionError},
     keyed_account::{from_keyed_account, get_signers, keyed_account_at_index, KeyedAccount},
-    process_instruction::InvokeContext,
+    process_instruction::{get_sysvar, InvokeContext},
     program_utils::limited_deserialize,
     pubkey::Pubkey,
     system_instruction,
@@ -103,7 +103,7 @@ pub enum VoteInstruction {
     ///   1. [SIGNER] Withdraw authority
     UpdateCommission(u8),
 
-    /// A Vote instruction with recent votes
+    /// A VoteSwitch instruction with recent votes
     ///
     /// # Account references
     ///   0. [WRITE] Vote account to vote with
@@ -123,6 +123,22 @@ pub enum VoteInstruction {
     ///   2. [SIGNER] Vote or withdraw authority
     ///   3. [SIGNER] New vote or withdraw authority
     AuthorizeChecked(VoteAuthorize),
+
+    /// A Vote instruction with recent votes and a node instance
+    ///
+    /// # Account references
+    ///   0. [WRITE] Vote account to vote with
+    ///   1. [SIGNER] Vote authority
+    ///   2. [] NodeInstance account
+    VoteWithInstance(Vote, node_instance::InstanceId),
+
+    /// A VoteSwitch instruction with recent votes and a node instance
+    ///
+    /// # Account references
+    ///   0. [WRITE] Vote account to vote with
+    ///   1. [SIGNER] Vote authority
+    ///   2. [] NodeInstance account
+    VoteSwitchWithInstance(Vote, node_instance::InstanceId, Hash),
 }
 
 fn initialize_account(vote_pubkey: &Pubkey, vote_init: &VoteInit) -> Instruction {
@@ -280,6 +296,47 @@ pub fn vote_switch(
     )
 }
 
+pub fn vote_with_instance(
+    vote_pubkey: &Pubkey,
+    authorized_voter_pubkey: &Pubkey,
+    vote: Vote,
+    node_instance_pubkey: &Pubkey,
+    instance_id: node_instance::InstanceId,
+) -> Instruction {
+    let account_metas = vec![
+        AccountMeta::new(*vote_pubkey, false),
+        AccountMeta::new_readonly(*authorized_voter_pubkey, true),
+        AccountMeta::new_readonly(*node_instance_pubkey, false),
+    ];
+
+    Instruction::new_with_bincode(
+        id(),
+        &VoteInstruction::VoteWithInstance(vote, instance_id),
+        account_metas,
+    )
+}
+
+pub fn vote_switch_with_instance(
+    vote_pubkey: &Pubkey,
+    authorized_voter_pubkey: &Pubkey,
+    vote: Vote,
+    proof_hash: Hash,
+    node_instance_pubkey: &Pubkey,
+    instance_id: node_instance::InstanceId,
+) -> Instruction {
+    let account_metas = vec![
+        AccountMeta::new(*vote_pubkey, false),
+        AccountMeta::new_readonly(*authorized_voter_pubkey, true),
+        AccountMeta::new_readonly(*node_instance_pubkey, false),
+    ];
+
+    Instruction::new_with_bincode(
+        id(),
+        &VoteInstruction::VoteSwitchWithInstance(vote, instance_id, proof_hash),
+        account_metas,
+    )
+}
+
 pub fn withdraw(
     vote_pubkey: &Pubkey,
     authorized_withdrawer_pubkey: &Pubkey,
@@ -379,6 +436,28 @@ pub fn process_instruction(
                     vote_authorize,
                     &signers,
                     &from_keyed_account::<Clock>(keyed_account_at_index(keyed_accounts, 1)?)?,
+                )
+            } else {
+                Err(InstructionError::InvalidInstructionData)
+            }
+        }
+        VoteInstruction::VoteWithInstance(vote, instance_id)
+        | VoteInstruction::VoteSwitchWithInstance(vote, instance_id, ..) => {
+            if invoke_context.is_feature_active(&feature_set::node_instance_program::id()) {
+                inc_new_counter_info!("vote-native", 1);
+
+                let node_instance_account = keyed_account_at_index(keyed_accounts, 2)?;
+                let slot_hashes =
+                    get_sysvar::<SlotHashes>(invoke_context, &sysvar::slot_hashes::id())?;
+                let clock = get_sysvar::<Clock>(invoke_context, &sysvar::clock::id())?;
+
+                vote_state::process_vote_with_node_instance(
+                    me,
+                    &slot_hashes,
+                    &clock,
+                    &vote,
+                    &signers,
+                    Some((node_instance_account, instance_id)),
                 )
             } else {
                 Err(InstructionError::InvalidInstructionData)

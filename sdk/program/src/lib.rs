@@ -61,6 +61,11 @@ pub mod vote {
         crate::declare_id!("Vote111111111111111111111111111111111111111");
     }
 }
+pub mod node_instance {
+    pub mod program {
+        crate::declare_id!("Node1nstance1111111111111111111111111111111");
+    }
+}
 
 /// Convenience macro to declare a static public key and functions to interact with it
 ///
