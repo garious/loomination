@@ -1012,49 +1012,55 @@ impl RpcClient {
         &self,
         transaction: &Transaction,
     ) -> ClientResult<Signature> {
-        let signature = self.send_transaction(transaction)?;
-        let recent_blockhash = if uses_durable_nonce(transaction).is_some() {
-            self.get_recent_blockhash_with_commitment(CommitmentConfig::processed())?
-                .value
-                .0
-        } else {
-            transaction.message.recent_blockhash
-        };
-        let status = loop {
-            let status = self.get_signature_status(&signature)?;
-            if status.is_none() {
-                if self
-                    .get_fee_calculator_for_blockhash_with_commitment(
-                        &recent_blockhash,
-                        CommitmentConfig::processed(),
-                    )?
-                    .value
-                    .is_none()
-                {
-                    break status;
-                }
+        const SEND_RETRIES: usize = 1;
+        const GET_STATUS_RETRIES: usize = usize::MAX;
+
+        'sending: for _ in 0..SEND_RETRIES {
+            let signature = self.send_transaction(transaction)?;
+
+            let recent_blockhash = if uses_durable_nonce(transaction).is_some() {
+                let (recent_blockhash, ..) = self
+                    .get_recent_blockhash_with_commitment(CommitmentConfig::processed())?
+                    .value;
+                recent_blockhash
             } else {
-                break status;
+                transaction.message.recent_blockhash
+            };
+
+            for status_retry in 0..GET_STATUS_RETRIES {
+                match self.get_signature_status(&signature)? {
+                    Some(Ok(_)) => return Ok(signature),
+                    Some(Err(e)) => return Err(e.into()),
+                    None => {
+                        let fee_calculator = self
+                            .get_fee_calculator_for_blockhash_with_commitment(
+                                &recent_blockhash,
+                                CommitmentConfig::processed(),
+                            )?
+                            .value;
+                        if fee_calculator.is_none() {
+                            // Block hash is not found by some reason
+                            break 'sending;
+                        } else if cfg!(not(test))
+                            // Ignore sleep at last step.
+                            && status_retry < GET_STATUS_RETRIES
+                        {
+                            // Retry twice a second
+                            sleep(Duration::from_millis(500));
+                            continue;
+                        }
+                    }
+                }
             }
-            if cfg!(not(test)) {
-                // Retry twice a second
-                sleep(Duration::from_millis(500));
-            }
-        };
-        if let Some(result) = status {
-            match result {
-                Ok(_) => Ok(signature),
-                Err(err) => Err(err.into()),
-            }
-        } else {
-            Err(RpcError::ForUser(
-                "unable to confirm transaction. \
-                                  This can happen in situations such as transaction expiration \
-                                  and insufficient fee-payer funds"
-                    .to_string(),
-            )
-            .into())
         }
+
+        Err(RpcError::ForUser(
+            "unable to confirm transaction. \
+             This can happen in situations such as transaction expiration \
+             and insufficient fee-payer funds"
+                .to_string(),
+        )
+        .into())
     }
 
     /// Note that `get_account` returns `Err(..)` if the account does not exist whereas
