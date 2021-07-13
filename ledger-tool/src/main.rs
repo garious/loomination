@@ -845,6 +845,10 @@ fn main() {
         .validator(is_slot)
         .takes_value(true)
         .help("Halt processing at the given slot");
+    let verify_index_arg = Arg::with_name("verify_accounts_index")
+        .long("verify-accounts-index")
+        .takes_value(false)
+        .help("For debugging and tests on accounts index.");
     let limit_load_slot_count_from_snapshot_arg = Arg::with_name("limit_load_slot_count_from_snapshot")
         .long("limit-load-slot-count-from-snapshot")
         .value_name("SLOT")
@@ -1121,6 +1125,7 @@ fn main() {
             .arg(&account_paths_arg)
             .arg(&halt_at_slot_arg)
             .arg(&limit_load_slot_count_from_snapshot_arg)
+            .arg(&verify_index_arg)
             .arg(&hard_forks_arg)
             .arg(&no_accounts_db_caching_arg)
             .arg(&accounts_db_test_hash_calculation_arg)
@@ -1845,6 +1850,7 @@ fn main() {
                     usize
                 )
                 .ok(),
+                verify_index: arg_matches.is_present("verify_accounts_index"),
                 allow_dead_slots: arg_matches.is_present("allow_dead_slots"),
                 accounts_db_test_hash_calculation: arg_matches
                     .is_present("accounts_db_test_hash_calculation"),

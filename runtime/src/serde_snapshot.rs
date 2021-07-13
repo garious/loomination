@@ -140,6 +140,7 @@ pub(crate) fn bank_from_stream<R>(
     caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
+    verify_index: bool,
 ) -> std::result::Result<Bank, Error>
 where
     R: Read,
@@ -161,6 +162,7 @@ where
                 caching_enabled,
                 limit_load_slot_count_from_snapshot,
                 shrink_ratio,
+                verify_index,
             )?;
             Ok(bank)
         }};
@@ -252,6 +254,7 @@ fn reconstruct_bank_from_fields<E>(
     caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
+    verify_index: bool,
 ) -> Result<Bank, Error>
 where
     E: SerializableStorage + std::marker::Sync,
@@ -265,6 +268,7 @@ where
         caching_enabled,
         limit_load_slot_count_from_snapshot,
         shrink_ratio,
+        verify_index,
     )?;
     accounts_db.freeze_accounts(
         &Ancestors::from(&bank_fields.ancestors),
@@ -314,6 +318,7 @@ fn reconstruct_accountsdb_from_fields<E>(
     caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
+    verify_index: bool,
 ) -> Result<AccountsDb, Error>
 where
     E: SerializableStorage + std::marker::Sync,
@@ -396,6 +401,6 @@ where
     accounts_db
         .write_version
         .fetch_add(version, Ordering::Relaxed);
-    accounts_db.generate_index(limit_load_slot_count_from_snapshot);
+    accounts_db.generate_index(limit_load_slot_count_from_snapshot, verify_index);
     Ok(accounts_db)
 }
