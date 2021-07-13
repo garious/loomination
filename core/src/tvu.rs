@@ -26,7 +26,7 @@ use crate::{
 use crossbeam_channel::unbounded;
 use solana_gossip::cluster_info::ClusterInfo;
 use solana_ledger::{
-    blockstore::Blockstore, blockstore_processor::TransactionStatusSender,
+    blockstore::Blockstore, blockstore_processor::{RpcAccountHistorySender, TransactionStatusSender},
     leader_schedule_cache::LeaderScheduleCache,
 };
 use solana_poh::poh_recorder::PohRecorder;
@@ -119,6 +119,7 @@ impl Tvu {
         transaction_status_sender: Option<TransactionStatusSender>,
         rewards_recorder_sender: Option<RewardsRecorderSender>,
         cache_block_meta_sender: Option<CacheBlockMetaSender>,
+        rpc_account_history_sender: Option<RpcAccountHistorySender>,
         snapshot_config_and_pending_package: Option<(SnapshotConfig, PendingSnapshotPackage)>,
         vote_tracker: Arc<VoteTracker>,
         retransmit_slots_sender: RetransmitSlotsSender,
@@ -269,6 +270,7 @@ impl Tvu {
             transaction_status_sender,
             rewards_recorder_sender,
             cache_block_meta_sender,
+            rpc_account_history_sender,
             bank_notification_sender,
             wait_for_vote_to_start_leader: tvu_config.wait_for_vote_to_start_leader,
         };

@@ -1219,6 +1219,13 @@ pub fn main() {
                         historical transaction info stored"),
         )
         .arg(
+            Arg::with_name("enable_rpc_account_history")
+                .long("enable-rpc-account-history")
+                .value_name("NUM_SLOTS")
+                .takes_value(true)
+                .help("Store per-slot account history in memory for retrieval over RPC"),
+        )
+        .arg(
             Arg::with_name("rpc_max_multiple_accounts")
                 .long("rpc-max-multiple-accounts")
                 .value_name("MAX ACCOUNTS")
@@ -2254,6 +2261,7 @@ pub fn main() {
                 .map(Duration::from_secs),
             account_indexes: account_indexes.clone(),
             rpc_scan_and_fix_roots: matches.is_present("rpc_scan_and_fix_roots"),
+            enable_rpc_account_history: matches.value_of("enable_rpc_account_history"),
         },
         rpc_addrs: value_t!(matches, "rpc_port", u16).ok().map(|rpc_port| {
             (
