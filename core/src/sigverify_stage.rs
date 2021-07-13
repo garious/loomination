@@ -84,13 +84,7 @@ impl SigVerifyStage {
             len,
             id
         );
-
-        let verified_batch = verifier.verify_batch(batch);
-
-        for v in verified_batch {
-            sendr.send(vec![v])?;
-        }
-
+        sendr.send(verifier.verify_batch(batch))?;
         verify_batch_time.stop();
 
         debug!(
