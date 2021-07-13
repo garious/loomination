@@ -27,3 +27,4 @@ log-*/
 /spl_*.so
 
 .DS_Store
+rerun-script.sh
