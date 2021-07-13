@@ -938,18 +938,19 @@ pub fn process_fees(
                 *recent_blockhash,
                 fee_calculator.lamports_per_signature,
                 None,
+                None,
             )
         } else {
             CliFees::none()
         }
     } else {
-        let result = rpc_client.get_recent_blockhash_with_commitment(config.commitment)?;
-        let (recent_blockhash, fee_calculator, last_valid_slot) = result.value;
+        let result = rpc_client.get_fees_with_commitment(config.commitment)?;
         CliFees::some(
             result.context.slot,
-            recent_blockhash,
-            fee_calculator.lamports_per_signature,
-            Some(last_valid_slot),
+            result.value.blockhash,
+            result.value.fee_calculator.lamports_per_signature,
+            None,
+            Some(result.value.last_valid_block_height),
         )
     };
     Ok(config.output_format.formatted_string(&fees))

@@ -1720,6 +1720,7 @@ pub struct CliFeesInner {
     pub blockhash: String,
     pub lamports_per_signature: u64,
     pub last_valid_slot: Option<Slot>,
+    pub last_valid_block_height: Option<Slot>,
 }
 
 impl QuietDisplay for CliFeesInner {}
@@ -1733,11 +1734,11 @@ impl fmt::Display for CliFeesInner {
             "Lamports per signature:",
             &self.lamports_per_signature.to_string(),
         )?;
-        let last_valid_slot = self
-            .last_valid_slot
+        let last_valid_block_height = self
+            .last_valid_block_height
             .map(|s| s.to_string())
             .unwrap_or_default();
-        writeln_name_value(f, "Last valid slot:", &last_valid_slot)
+        writeln_name_value(f, "Last valid block height:", &last_valid_block_height)
     }
 }
 
@@ -1766,6 +1767,7 @@ impl CliFees {
         blockhash: Hash,
         lamports_per_signature: u64,
         last_valid_slot: Option<Slot>,
+        last_valid_block_height: Option<Slot>,
     ) -> Self {
         Self {
             inner: Some(CliFeesInner {
@@ -1773,6 +1775,7 @@ impl CliFees {
                 blockhash: blockhash.to_string(),
                 lamports_per_signature,
                 last_valid_slot,
+                last_valid_block_height,
             }),
         }
     }
