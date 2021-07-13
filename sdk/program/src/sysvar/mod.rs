@@ -32,6 +32,10 @@ macro_rules! declare_sysvar_id(
         $crate::declare_id!($name);
 
         impl $crate::sysvar::SysvarId for $type {
+            fn id() -> $crate::pubkey::Pubkey {
+                id()
+            }
+
             fn check_id(pubkey: &$crate::pubkey::Pubkey) -> bool {
                 check_id(pubkey)
             }
@@ -51,6 +55,8 @@ macro_rules! declare_sysvar_id(
 crate::declare_id!("Sysvar1111111111111111111111111111111111111");
 
 pub trait SysvarId {
+    fn id() -> Pubkey;
+
     fn check_id(pubkey: &Pubkey) -> bool;
 }
 
@@ -113,6 +119,10 @@ mod tests {
     }
     crate::declare_id!("TestSysvar111111111111111111111111111111111");
     impl crate::sysvar::SysvarId for TestSysvar {
+        fn id() -> crate::pubkey::Pubkey {
+            id()
+        }
+
         fn check_id(pubkey: &crate::pubkey::Pubkey) -> bool {
             check_id(pubkey)
         }

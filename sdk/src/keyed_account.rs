@@ -270,6 +270,9 @@ mod tests {
     }
     crate::declare_id!("TestSysvar111111111111111111111111111111111");
     impl solana_program::sysvar::SysvarId for TestSysvar {
+        fn id() -> crate::pubkey::Pubkey {
+            id()
+        }
         fn check_id(pubkey: &crate::pubkey::Pubkey) -> bool {
             check_id(pubkey)
         }
