@@ -3710,12 +3710,15 @@ dependencies = [
 name = "solana-secp256k1-program"
 version = "1.7.5"
 dependencies = [
+<<<<<<< HEAD
  "bincode",
  "digest 0.9.0",
  "libsecp256k1 0.3.5",
  "rand 0.7.3",
  "sha3",
  "solana-logger 1.7.5",
+=======
+>>>>>>> 0d3e8ada9 (Cleanup secp256k1 deps (#18618))
  "solana-sdk",
 ]
 
