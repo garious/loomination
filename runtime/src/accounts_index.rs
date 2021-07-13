@@ -566,19 +566,18 @@ impl<'a, T: 'static + Clone> Iterator for AccountsIndexIterator<'a, T> {
             return None;
         }
 
-        let chunk: Vec<(Pubkey, AccountMapEntry<T>)> = self
-            .account_maps
-            .iter()
-            .map(|i| {
-                i.read()
-                    .unwrap()
-                    .range((self.start_bound, self.end_bound))
-                    .map(|(pubkey, account_map_entry)| (*pubkey, account_map_entry.clone()))
-                    .collect::<Vec<_>>()
-            })
-            .flatten()
-            .take(ITER_BATCH_SIZE)
-            .collect();
+        let mut chunk: Vec<(Pubkey, AccountMapEntry<T>)> = Vec::with_capacity(ITER_BATCH_SIZE);
+        'outer: for i in self.account_maps.iter() {
+            for (pubkey, account_map_entry) in
+                i.read().unwrap().range((self.start_bound, self.end_bound))
+            {
+                if chunk.len() >= ITER_BATCH_SIZE {
+                    break 'outer;
+                }
+                let item = (*pubkey, account_map_entry.clone());
+                chunk.push(item);
+            }
+        }
 
         if chunk.is_empty() {
             self.is_finished = true;
