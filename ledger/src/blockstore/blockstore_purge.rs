@@ -137,6 +137,10 @@ impl Blockstore {
             .is_ok()
             & self
                 .db
+                .delete_range_cf::<cf::BankHash>(&mut write_batch, from_slot, to_slot)
+                .is_ok()
+            & self
+                .db
                 .delete_range_cf::<cf::Root>(&mut write_batch, from_slot, to_slot)
                 .is_ok()
             & self
@@ -262,6 +266,10 @@ impl Blockstore {
                 .unwrap_or(false)
             && self
                 .orphans_cf
+                .compact_range(from_slot, to_slot)
+                .unwrap_or(false)
+            && self
+                .bank_hash_cf
                 .compact_range(from_slot, to_slot)
                 .unwrap_or(false)
             && self

@@ -47,6 +47,8 @@ const DUPLICATE_SLOTS_CF: &str = "duplicate_slots";
 const ERASURE_META_CF: &str = "erasure_meta";
 // Column family for orphans data
 const ORPHANS_CF: &str = "orphans";
+/// Column family for bank hashes
+const BANK_HASH_CF: &str = "bank_hashes";
 // Column family for root data
 const ROOT_CF: &str = "root";
 /// Column family for indexes
@@ -132,6 +134,10 @@ pub mod columns {
     #[derive(Debug)]
     /// The erasure meta column
     pub struct ErasureMeta;
+
+    #[derive(Debug)]
+    /// The bank hash column
+    pub struct BankHash;
 
     #[derive(Debug)]
     /// The root column
@@ -262,11 +268,7 @@ impl Rocks {
         access_type: AccessType,
         recovery_mode: Option<BlockstoreRecoveryMode>,
     ) -> Result<Rocks> {
-        use columns::{
-            AddressSignatures, BlockHeight, Blocktime, DeadSlots, DuplicateSlots, ErasureMeta,
-            Index, Orphans, PerfSamples, ProgramCosts, Rewards, Root, ShredCode, ShredData,
-            SlotMeta, TransactionStatus, TransactionStatusIndex,
-        };
+        use columns::*;
 
         fs::create_dir_all(&path)?;
 
@@ -301,6 +303,10 @@ impl Rocks {
         let orphans_cf_descriptor = ColumnFamilyDescriptor::new(
             Orphans::NAME,
             get_cf_options::<Orphans>(&access_type, &oldest_slot),
+        );
+        let bank_hash_cf_descriptor = ColumnFamilyDescriptor::new(
+            BankHash::NAME,
+            get_cf_options::<BankHash>(&access_type, &oldest_slot),
         );
         let root_cf_descriptor = ColumnFamilyDescriptor::new(
             Root::NAME,
@@ -359,6 +365,7 @@ impl Rocks {
             (DuplicateSlots::NAME, duplicate_slots_cf_descriptor),
             (ErasureMeta::NAME, erasure_meta_cf_descriptor),
             (Orphans::NAME, orphans_cf_descriptor),
+            (BankHash::NAME, bank_hash_cf_descriptor),
             (Root::NAME, root_cf_descriptor),
             (Index::NAME, index_cf_descriptor),
             (ShredData::NAME, shred_data_cf_descriptor),
@@ -472,11 +479,7 @@ impl Rocks {
     }
 
     fn columns(&self) -> Vec<&'static str> {
-        use columns::{
-            AddressSignatures, BlockHeight, Blocktime, DeadSlots, DuplicateSlots, ErasureMeta,
-            Index, Orphans, PerfSamples, ProgramCosts, Rewards, Root, ShredCode, ShredData,
-            SlotMeta, TransactionStatus, TransactionStatusIndex,
-        };
+        use columns::*;
 
         vec![
             ErasureMeta::NAME,
@@ -484,6 +487,7 @@ impl Rocks {
             DuplicateSlots::NAME,
             Index::NAME,
             Orphans::NAME,
+            BankHash::NAME,
             Root::NAME,
             SlotMeta::NAME,
             ShredData::NAME,
@@ -885,6 +889,14 @@ impl ColumnName for columns::Orphans {
 }
 impl TypedColumn for columns::Orphans {
     type Type = bool;
+}
+
+impl SlotColumn for columns::BankHash {}
+impl ColumnName for columns::BankHash {
+    const NAME: &'static str = BANK_HASH_CF;
+}
+impl TypedColumn for columns::BankHash {
+    type Type = blockstore_meta::FrozenHashVersioned;
 }
 
 impl SlotColumn for columns::Root {}

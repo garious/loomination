@@ -862,6 +862,7 @@ fn process_bank_0(
     )
     .expect("processing for bank 0 must succeed");
     bank0.freeze();
+    blockstore.insert_bank_hash(bank0.slot(), bank0.hash(), false);
     cache_block_meta(bank0, cache_block_meta_sender);
 }
 
@@ -1034,6 +1035,7 @@ fn load_frozen_forks(
                             }
                             inc_new_counter_info!("load_frozen_forks-cluster-confirmed-root", rooted_slots.len());
                             blockstore.set_roots(rooted_slots.iter().map(|(slot, _hash)| slot)).expect("Blockstore::set_roots should succeed");
+                            blockstore.set_duplicate_confirmed_slots_and_hashes(rooted_slots.into_iter()).expect("Blockstore::set_duplicate_confirmed should succeed");
                             Some(cluster_root_bank)
                         } else {
                             None
@@ -1179,6 +1181,7 @@ fn process_single_slot(
     })?;
 
     bank.freeze(); // all banks handled by this routine are created from complete slots
+    blockstore.insert_bank_hash(bank.slot(), bank.hash(), false);
     cache_block_meta(bank, cache_block_meta_sender);
 
     Ok(())
